@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Bienvenida PekarchOS
+GenericName=Bienvenida
+Comment=Ficha del equipo y paquetes opcionales de PekarchOS
+Exec=/usr/local/bin/pekarchos-welcome
+Icon=/usr/share/pekarchos/logo.png
+Terminal=false
+Categories=System;Qt;
+StartupNotify=true

@@ -128,6 +128,7 @@ for folder in Desktop Escritorio; do
 	install -d -o live -g live "/home/live/${folder}"
 	install -m 0644 -o live -g live /usr/share/pekarchos/LEEME.txt "/home/live/${folder}/LEEME.txt"
 	install -m 0644 -o live -g live /usr/share/applications/pekarchos-install.desktop "/home/live/${folder}/pekarchos-install.desktop"
+	install -m 0644 -o live -g live /usr/share/applications/pekarchos-welcome.desktop "/home/live/${folder}/pekarchos-welcome.desktop"
 done
 chown -R live:live /home/live
 

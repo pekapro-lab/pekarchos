@@ -33,6 +33,30 @@ chmod 0440 /etc/sudoers.d/builder
 echo "==> Paquete de marca"
 src="${WORK}/pkgbuild"
 cp -a "${ROOT}/branding/pekarchos-branding" "${src}"
+
+echo "==> Candy Icons (commit fijado)"
+candy_pin="$(tr -d '[:space:]' < "${ROOT}/branding/pins/candy-icons.commit")"
+candy_tmp="$(mktemp -d)"
+git -C "${candy_tmp}" init
+git -C "${candy_tmp}" remote add origin https://github.com/EliverLara/candy-icons.git
+git -C "${candy_tmp}" fetch --depth 1 origin "${candy_pin}"
+git -C "${candy_tmp}" checkout --detach FETCH_HEAD
+got="$(git -C "${candy_tmp}" rev-parse HEAD)"
+if [[ "${got}" != "${candy_pin}" ]]; then
+	echo "El commit de candy-icons es ${got}, se esperaba ${candy_pin}." >&2
+	exit 1
+fi
+rm -rf "${candy_tmp}/.git" "${candy_tmp}/preview"
+sed -i 's/^Inherits=.*/Inherits=breeze-dark,breeze,Adwaita,hicolor/' "${candy_tmp}/index.theme"
+if grep -q '^FollowsColorScheme=' "${candy_tmp}/index.theme"; then
+	sed -i 's/^FollowsColorScheme=.*/FollowsColorScheme=false/' "${candy_tmp}/index.theme"
+else
+	printf '\nFollowsColorScheme=false\n' >>"${candy_tmp}/index.theme"
+fi
+mkdir -p "${src}/root/usr/share/icons"
+rm -rf "${src}/root/usr/share/icons/candy-icons"
+mv "${candy_tmp}" "${src}/root/usr/share/icons/candy-icons"
+
 chown -R builder:builder "${src}"
 sudo -u builder bash -c "cd '${src}' && makepkg -s --noconfirm"
 cp "${src}"/pekarchos-branding-*.pkg.tar.zst "${WORK}/repo/"
@@ -92,3 +116,9 @@ echo "==> Resultado"
 ls -lh "${OUT}"/*.iso
 sha256sum "${OUT}"/*.iso | tee "${OUT}/SHA256SUMS"
 stat -c '%n %s' "${OUT}"/*.iso
+iso_size="$(stat -c%s "${OUT}"/*.iso)"
+iso_limit=$((2 * 1024 * 1024 * 1024))
+if (( iso_size >= iso_limit )); then
+	echo "La ISO pesa ${iso_size} bytes y el límite de una release es ${iso_limit}." >&2
+	exit 1
+fi

@@ -10,7 +10,7 @@ Conjunto corto de Plasma (`plasma-desktop`), no `plasma-meta`:
 
 - Sesión Plasma (Wayland). En los repos actuales de Arch ya no está el paquete `plasma-x11-session`.
 - SDDM con el tema PekarchOS y entrada automática del usuario en vivo.
-- Fondo, logotipo, esquema de color y perfil de Konsole originales (CC0). Ver [CREDITS.md](CREDITS.md).
+- Fondo, logotipo, esquema PekarchOS Neon, acento magenta, perfil de Konsole y tema de SDDM (CC0). Iconos [Candy](THIRD-PARTY.md) (GPL-3.0) con respaldo Breeze. Cursor y estilo de widgets: Breeze.
 - fastfetch con el logo de PekarchOS al abrir una terminal.
 
 Usuario del medio en vivo:
@@ -28,12 +28,13 @@ La cuenta `root` está bloqueada. SSH no se arranca solo.
 - Firefox (con el paquete de idioma `firefox-i18n-es-es`)
 - LibreOffice Fresh y el paquete de idioma español, más guiones y sinónimos (`hyphen-es`, `mythes-es`)
 - VLC, GIMP, Kate, Dolphin, Konsole, Ark, Spectacle
+- Bienvenida PekarchOS (ficha del equipo y paquetes opcionales). Kdenlive, OBS y OpenShot no van en la ISO: no caben bajo 2 GiB. OpenShot además ya no está en los repos oficiales. Se instalan desde la bienvenida, salvo OpenShot.
 - `git` y el grupo `base-devel`
 - Flatpak, Discover y PackageKit. En la construcción se intenta añadir el remoto de Flathub
 - NetworkManager, PipeWire (Pulse, ALSA y JACK) con WirePlumber
 - Bluetooth (BlueZ y Bluedevil) y impresión (CUPS, `cups-pdf`, Print Manager)
 - Firmware habitual en el live (`linux-firmware` de Intel, AMD/AMDGPU, Radeon, Realtek y Broadcom, más `sof-firmware`) y microcódigos Intel y AMD. El instalador mete el metapaquete `linux-firmware` completo en el disco
-- Mesa, Vulkan para AMD, Intel y Nouveau, y utilidades de invitado para VirtualBox, QEMU y VMware
+- Mesa, Vulkan para AMD, Intel y Nouveau, y utilidades de invitado para VirtualBox y QEMU
 
 No lleva un helper del AUR. `yay` y `paru` salen del AUR y alargarían una construcción que tiene que salir solo de `core` y `extra`. Con `git` y `base-devel` ya se puede instalar `paru` después, si hace falta.
 
@@ -57,6 +58,21 @@ El disco y las contraseñas no vienen rellenados: hay que elegirlos en el menú 
 Al terminar, un comando del perfil instala el paquete `pekarchos-branding` (fondo, tema, fastfetch y `os-release`) desde la propia ISO.
 
 **Calamares no entra en esta versión.** No está en los repositorios oficiales, solo en el AUR, y el empaquetado arrastra más piezas del AUR. Un instalador a medias sería peor que archinstall, que es el que Arch mantiene y el que ya usa el perfil `releng`.
+
+## Bienvenida
+
+En el sistema instalado, al entrar la primera vez se abre **Bienvenida PekarchOS** (si dejas marcada «Mostrar al iniciar»). En el live no se abre sola; está en el menú y en el escritorio. Muestra versión, núcleo, Plasma, CPU, RAM y GPU, y puede instalar paquetes oficiales con `pkexec` y `pacman`:
+
+- Vídeo y streaming: Kdenlive, OBS Studio, HandBrake, frei0r, ffmpeg. OpenShot se omite: ya no está en `extra`.
+- Juegos: Steam (activa `multilib`), Lutris, Wine, GameMode, MangoHud
+- Gráficos: Krita, Inkscape, Blender
+- Oficina extra: LibreOffice en español, diccionario y Okular
+- Desarrollo: `code` (compilación abierta, MIT), Python, Node.js, Docker
+- Multimedia: Audacity, mpv y códecs GStreamer
+- Internet: Thunderbird, Chromium, qBittorrent
+- Opción aparte para instalar Flatpak y añadir Flathub
+
+Esas colecciones no van preinstaladas en la ISO: Kdenlive y OBS, con sus dependencias (sobre todo `cef` y OpenCV), suman unos 190 MiB y pasarían de 2 GiB.
 
 ## Descargar la ISO
 

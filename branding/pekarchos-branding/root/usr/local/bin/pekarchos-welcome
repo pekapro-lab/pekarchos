@@ -1,0 +1,418 @@
+#!/usr/bin/env python3
+"""Bienvenida de PekarchOS: ficha del equipo y paquetes opcionales."""
+
+from __future__ import annotations
+
+import configparser
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+from PyQt6.QtCore import QProcess, Qt
+from PyQt6.QtGui import QFont, QPixmap, QTextCursor
+from PyQt6.QtWidgets import (
+    QApplication,
+    QCheckBox,
+    QFrame,
+    QGridLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QPlainTextEdit,
+    QProgressBar,
+    QPushButton,
+    QScrollArea,
+    QVBoxLayout,
+    QWidget,
+)
+
+CONFIG = Path.home() / ".config" / "pekarchos" / "welcome.conf"
+INSTALLER = "/usr/local/bin/pekarchos-welcome-install"
+LOGO = "/usr/share/pekarchos/logo.png"
+
+PACKS = [
+    {
+        "id": "video",
+        "title": "Vídeo y streaming",
+        "blurb": "Kdenlive, OBS Studio, HandBrake, frei0r y ffmpeg. OpenShot ya no está en los repos oficiales y se omite.",
+        "packages": ["kdenlive", "obs-studio", "handbrake", "frei0r-plugins", "ffmpeg"],
+        "multilib": False,
+    },
+    {
+        "id": "games",
+        "title": "Juegos",
+        "blurb": "Steam (activa multilib), Lutris, Wine, GameMode y MangoHud.",
+        "packages": ["steam", "lutris", "wine", "gamemode", "mangohud"],
+        "multilib": True,
+    },
+    {
+        "id": "graphics",
+        "title": "Gráficos",
+        "blurb": "Krita, Inkscape y Blender.",
+        "packages": ["krita", "inkscape", "blender"],
+        "multilib": False,
+    },
+    {
+        "id": "office",
+        "title": "Oficina extra",
+        "blurb": "LibreOffice Fresh en español, diccionario y Okular.",
+        "packages": ["libreoffice-fresh", "libreoffice-fresh-es", "hunspell-es_es", "okular"],
+        "multilib": False,
+    },
+    {
+        "id": "dev",
+        "title": "Desarrollo",
+        "blurb": "VS Code (paquete code, compilación abierta, MIT), Python, Node.js y Docker.",
+        "packages": ["code", "python", "nodejs", "docker"],
+        "multilib": False,
+    },
+    {
+        "id": "media",
+        "title": "Multimedia",
+        "blurb": "Audacity, mpv y códecs GStreamer (good, bad, ugly y libav).",
+        "packages": [
+            "audacity",
+            "mpv",
+            "gst-plugins-good",
+            "gst-plugins-bad",
+            "gst-plugins-ugly",
+            "gst-libav",
+        ],
+        "multilib": False,
+    },
+    {
+        "id": "internet",
+        "title": "Internet",
+        "blurb": "Thunderbird, Chromium y qBittorrent.",
+        "packages": ["thunderbird", "chromium", "qbittorrent"],
+        "multilib": False,
+    },
+]
+
+STYLE = """
+QWidget { background: #070712; color: #e2f4ff; }
+QLabel#title { color: #00f0ff; font-size: 28px; font-weight: 700; }
+QLabel#credit { color: #ff2bd6; font-size: 15px; }
+QLabel#muted { color: #9ad7e6; }
+QGroupBox {
+    border: 1px solid #ff2bd6;
+    border-radius: 12px;
+    margin-top: 14px;
+    padding: 10px 8px 8px 8px;
+    font-weight: 600;
+}
+QGroupBox::title { subcontrol-origin: margin; left: 12px; padding: 0 6px; color: #00f0ff; }
+QCheckBox { spacing: 8px; }
+QCheckBox::indicator { width: 16px; height: 16px; }
+QPushButton {
+    background: #14142c;
+    color: #00f0ff;
+    border: 1px solid #00f0ff;
+    border-radius: 8px;
+    padding: 8px 18px;
+}
+QPushButton:hover { background: #241038; color: #ff2bd6; border-color: #ff2bd6; }
+QPushButton:disabled { color: #607080; border-color: #304048; }
+QPlainTextEdit {
+    background: #0c0c1c;
+    color: #d7f8ff;
+    border: 1px solid #7a3cff;
+    border-radius: 8px;
+    font-family: monospace;
+}
+QProgressBar {
+    border: 1px solid #00f0ff;
+    border-radius: 6px;
+    background: #0c0c1c;
+    text-align: center;
+    color: #e2f4ff;
+    min-height: 16px;
+}
+QProgressBar::chunk { background: #ff2bd6; }
+QScrollArea { border: none; }
+"""
+
+
+def read_os_release() -> dict[str, str]:
+    data: dict[str, str] = {}
+    for path in (Path("/etc/os-release"), Path("/usr/lib/os-release")):
+        if not path.is_file():
+            continue
+        for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+            if "=" not in line or line.startswith("#"):
+                continue
+            key, value = line.split("=", 1)
+            data[key] = value.strip().strip('"')
+        if data:
+            break
+    return data
+
+
+def cpu_summary() -> str:
+    model = "desconocida"
+    try:
+        for line in Path("/proc/cpuinfo").read_text(encoding="utf-8", errors="replace").splitlines():
+            if line.lower().startswith("model name"):
+                model = line.split(":", 1)[1].strip()
+                break
+    except OSError:
+        pass
+    threads = os.cpu_count() or 1
+    return f"{model} ({threads} hilos)"
+
+
+def ram_summary() -> str:
+    try:
+        for line in Path("/proc/meminfo").read_text(encoding="utf-8", errors="replace").splitlines():
+            if line.startswith("MemTotal:"):
+                kib = int(line.split()[1])
+                return f"{kib / 1024 / 1024:.1f} GiB"
+    except (OSError, ValueError, IndexError):
+        pass
+    return "desconocida"
+
+
+def gpu_summary() -> str:
+    if shutil.which("lspci"):
+        try:
+            out = subprocess.check_output(["lspci", "-mm"], text=True, stderr=subprocess.DEVNULL)
+        except (OSError, subprocess.CalledProcessError):
+            out = ""
+        found = []
+        for line in out.splitlines():
+            if "VGA" not in line and "3D controller" not in line and "Display controller" not in line:
+                continue
+            bits = [part for part in line.split('"') if part.strip()]
+            if len(bits) >= 4:
+                found.append(f"{bits[2]} {bits[3]}")
+        if found:
+            return "; ".join(found)
+    drivers: list[str] = []
+    drm = Path("/sys/class/drm")
+    if drm.is_dir():
+        for card in sorted(drm.glob("card[0-9]")):
+            driver = card / "device" / "driver"
+            if driver.exists():
+                drivers.append(driver.resolve().name)
+    if drivers:
+        unique = list(dict.fromkeys(drivers))
+        return "controlador " + ", ".join(unique)
+    return "no detectada"
+
+
+def plasma_version() -> str:
+    try:
+        out = subprocess.check_output(
+            ["plasmashell", "--version"],
+            text=True,
+            stderr=subprocess.STDOUT,
+        ).strip()
+    except (OSError, subprocess.CalledProcessError):
+        return "no disponible"
+    return out or "no disponible"
+
+
+def package_installed(name: str) -> bool:
+    return subprocess.call(["pacman", "-Q", name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0
+
+
+def load_show_on_start() -> bool:
+    if not CONFIG.is_file():
+        return True
+    parser = configparser.ConfigParser()
+    parser.read(CONFIG, encoding="utf-8")
+    return parser.getboolean("welcome", "show_on_start", fallback=True)
+
+
+def save_show_on_start(enabled: bool) -> None:
+    CONFIG.parent.mkdir(parents=True, exist_ok=True)
+    parser = configparser.ConfigParser()
+    parser["welcome"] = {"show_on_start": "true" if enabled else "false"}
+    with CONFIG.open("w", encoding="utf-8") as handle:
+        parser.write(handle)
+
+
+class Welcome(QWidget):
+    def __init__(self) -> None:
+        super().__init__()
+        self.setWindowTitle("Bienvenida a PekarchOS")
+        self.resize(980, 720)
+        self.setStyleSheet(STYLE)
+        self.proc = QProcess(self)
+        self.proc.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
+        self.proc.readyReadStandardOutput.connect(self._read_log)
+        self.proc.finished.connect(self._on_finished)
+        self.boxes: list[tuple[QCheckBox, dict]] = []
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(18, 18, 18, 18)
+        root.setSpacing(12)
+
+        header = QHBoxLayout()
+        logo = QLabel()
+        pixmap = QPixmap(LOGO)
+        if not pixmap.isNull():
+            logo.setPixmap(pixmap.scaled(88, 88, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+        header.addWidget(logo)
+        titles = QVBoxLayout()
+        title = QLabel("PekarchOS")
+        title.setObjectName("title")
+        credit = QLabel("Hecho por Pekapro")
+        credit.setObjectName("credit")
+        titles.addWidget(title)
+        titles.addWidget(credit)
+        titles.addStretch(1)
+        header.addLayout(titles, 1)
+        root.addLayout(header)
+
+        info = QLabel(self._info_text())
+        info.setObjectName("muted")
+        info.setWordWrap(True)
+        info.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        root.addWidget(info)
+
+        group = QGroupBox("Paquetes opcionales")
+        grid = QGridLayout(group)
+        for index, pack in enumerate(PACKS):
+            box = QCheckBox(pack["title"])
+            box.setToolTip(pack["blurb"])
+            installed = all(package_installed(name) for name in pack["packages"])
+            if installed:
+                box.setText(pack["title"] + "  (instalado)")
+                box.setChecked(True)
+            hint = QLabel(pack["blurb"])
+            hint.setObjectName("muted")
+            hint.setWordWrap(True)
+            row = index
+            grid.addWidget(box, row, 0)
+            grid.addWidget(hint, row, 1)
+            self.boxes.append((box, pack))
+        self.flatpak = QCheckBox("Activar Flatpak y Flathub")
+        flatpak_hint = QLabel("Instala flatpak si falta y añade el remoto Flathub.")
+        flatpak_hint.setObjectName("muted")
+        flatpak_hint.setWordWrap(True)
+        grid.addWidget(self.flatpak, len(PACKS), 0)
+        grid.addWidget(flatpak_hint, len(PACKS), 1)
+        grid.setColumnStretch(1, 1)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setWidget(group)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        root.addWidget(scroll, 1)
+
+        self.log = QPlainTextEdit()
+        self.log.setReadOnly(True)
+        self.log.setPlaceholderText("El registro de pacman aparece aquí.")
+        self.log.setFont(QFont("DejaVu Sans Mono", 10))
+        self.log.setFixedHeight(160)
+        root.addWidget(self.log)
+
+        self.progress = QProgressBar()
+        self.progress.setRange(0, 1)
+        self.progress.setValue(0)
+        root.addWidget(self.progress)
+
+        actions = QHBoxLayout()
+        self.startup = QCheckBox("Mostrar al iniciar")
+        self.startup.setChecked(load_show_on_start())
+        self.startup.toggled.connect(save_show_on_start)
+        actions.addWidget(self.startup)
+        actions.addStretch(1)
+        self.install_button = QPushButton("Instalar selección")
+        self.install_button.clicked.connect(self.install_selected)
+        actions.addWidget(self.install_button)
+        root.addLayout(actions)
+
+    def _info_text(self) -> str:
+        release = read_os_release()
+        name = release.get("PRETTY_NAME") or release.get("NAME") or "PekarchOS"
+        version = release.get("VERSION_ID") or release.get("VERSION") or "desconocida"
+        return (
+            f"{name}\n"
+            f"Versión: {version}\n"
+            f"Núcleo: {os.uname().release}\n"
+            f"Plasma: {plasma_version()}\n"
+            f"CPU: {cpu_summary()}\n"
+            f"RAM: {ram_summary()}\n"
+            f"GPU: {gpu_summary()}"
+        )
+
+    def install_selected(self) -> None:
+        if self.proc.state() != QProcess.ProcessState.NotRunning:
+            return
+        packages: list[str] = []
+        multilib = False
+        for box, pack in self.boxes:
+            if not box.isChecked():
+                continue
+            packages.extend(pack["packages"])
+            multilib = multilib or bool(pack["multilib"])
+        if not packages and not self.flatpak.isChecked():
+            self.log.setPlainText("No hay nada seleccionado.")
+            return
+        if not Path(INSTALLER).is_file():
+            self.log.setPlainText(f"No está {INSTALLER}.")
+            return
+        args = [INSTALLER]
+        if multilib:
+            args.append("--enable-multilib")
+        if self.flatpak.isChecked():
+            args.append("--flathub")
+        args.append("--")
+        args.extend(packages)
+        self.log.clear()
+        self.progress.setRange(0, 0)
+        self.install_button.setEnabled(False)
+        self.proc.start("pkexec", args)
+
+    def _read_log(self) -> None:
+        data = bytes(self.proc.readAllStandardOutput()).decode("utf-8", errors="replace")
+        self.log.moveCursor(QTextCursor.MoveOperation.End)
+        self.log.insertPlainText(data)
+        self.log.moveCursor(QTextCursor.MoveOperation.End)
+
+    def _on_finished(self, *args) -> None:
+        code = int(args[0]) if args else 1
+        self._finished(code)
+
+    def _finished(self, code: int) -> None:
+        self.progress.setRange(0, 1)
+        self.progress.setValue(1 if code == 0 else 0)
+        self.install_button.setEnabled(True)
+        if code == 0:
+            self.log.appendPlainText("\nInstalación terminada.")
+        elif code in (126, 127):
+            self.log.appendPlainText("\nInstalación cancelada o pkexec no pudo arrancar.")
+        else:
+            self.log.appendPlainText(f"\nPacman terminó con código {code}.")
+        self._refresh_installed()
+
+    def _refresh_installed(self) -> None:
+        for box, pack in self.boxes:
+            title = pack["title"]
+            if all(package_installed(name) for name in pack["packages"]):
+                box.setText(title + "  (instalado)")
+                box.setChecked(True)
+            else:
+                box.setText(title)
+
+
+def main() -> int:
+    autostart = "--autostart" in sys.argv
+    if autostart:
+        if Path("/run/archiso").is_dir():
+            return 0
+        if not load_show_on_start():
+            return 0
+    app = QApplication(sys.argv)
+    app.setApplicationName("pekarchos-welcome")
+    window = Welcome()
+    window.show()
+    return app.exec()
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

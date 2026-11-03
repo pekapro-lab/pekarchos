@@ -1,12 +1,12 @@
 # Maintainer: Pekapro
 pkgname=pekarchos-branding
-pkgver=0.1.0
+pkgver=0.2.0
 pkgrel=1
-pkgdesc='Marca, fondo de pantalla y ajustes visuales de PekarchOS'
+pkgdesc='Marca, iconos, bienvenida y ajustes visuales de PekarchOS'
 arch=(any)
 url='https://github.com/pekapro-lab/pekarchos'
 license=('CC0-1.0' 'GPL-3.0-or-later')
-depends=('bash')
+depends=('bash' 'python-pyqt6')
 install="${pkgname}.install"
 options=('!debug')
 sha256sums=()

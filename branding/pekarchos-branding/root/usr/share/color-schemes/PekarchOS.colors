@@ -75,18 +75,18 @@ ForegroundPositive=0,230,180
 ForegroundVisited=180,120,255
 
 [Colors:Selection]
-BackgroundAlternate=0,160,180
-BackgroundNormal=0,180,200
+BackgroundAlternate=120,30,180
+BackgroundNormal=180,40,220
 DecorationFocus=0,240,255
 DecorationHover=255,43,214
-ForegroundActive=8,10,22
-ForegroundInactive=8,10,22
-ForegroundLink=8,10,22
-ForegroundNegative=8,10,22
-ForegroundNeutral=8,10,22
-ForegroundNormal=8,10,22
-ForegroundPositive=8,10,22
-ForegroundVisited=8,10,22
+ForegroundActive=255,255,255
+ForegroundInactive=226,244,255
+ForegroundLink=0,240,255
+ForegroundNegative=255,43,214
+ForegroundNeutral=255,176,0
+ForegroundNormal=255,255,255
+ForegroundPositive=0,230,180
+ForegroundVisited=210,180,255
 
 [Colors:Tooltip]
 BackgroundAlternate=20,14,40
@@ -140,7 +140,7 @@ contrast=4
 
 [WM]
 activeBackground=8,10,22
-activeBlend=0,240,255
+activeBlend=255,43,214
 activeForeground=0,240,255
 inactiveBackground=14,16,36
 inactiveBlend=40,42,64

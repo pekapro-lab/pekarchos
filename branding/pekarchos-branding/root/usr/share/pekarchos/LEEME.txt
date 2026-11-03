@@ -12,6 +12,9 @@ Para instalar PekarchOS en un disco, abre «Instalar PekarchOS»
 en el menú de aplicaciones. archinstall pedirá el disco y la
 contraseña de la cuenta nueva: no vienen rellenados.
 
+«Bienvenida PekarchOS» muestra el equipo y paquetes opcionales
+(vídeo, juegos, gráficos…). En el live no se abre sola.
+
 Antes de instalar, haz una copia de seguridad. Elegir mal el
 disco borra lo que hubiera en él.
 
