@@ -1,0 +1,10 @@
+[General]
+AccentColor=0,240,255
+ColorScheme=PekarchOS
+
+[Icons]
+Theme=breeze-dark
+
+[KDE]
+LookAndFeelPackage=org.kde.breezedark.desktop
+widgetStyle=Breeze

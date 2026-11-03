@@ -1,0 +1,12 @@
+{
+  "KPlugin": {
+    "Authors": [
+      {
+        "Name": "Pekapro"
+      }
+    ],
+    "Id": "PekarchOS",
+    "License": "CC0-1.0",
+    "Name": "PekarchOS"
+  }
+}

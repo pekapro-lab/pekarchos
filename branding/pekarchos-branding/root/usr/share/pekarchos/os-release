@@ -1,0 +1,13 @@
+NAME="PekarchOS"
+PRETTY_NAME="PekarchOS"
+ID=pekarchos
+ID_LIKE=arch
+VERSION_ID=0.1.0
+VERSION="0.1.0"
+BUILD_ID=rolling
+HOME_URL="https://github.com/pekapro-lab/pekarchos"
+DOCUMENTATION_URL="https://github.com/pekapro-lab/pekarchos"
+SUPPORT_URL="https://github.com/pekapro-lab/pekarchos"
+BUG_REPORT_URL="https://github.com/pekapro-lab/pekarchos"
+LOGO=pekarchos
+ANSI_COLOR="0;36"

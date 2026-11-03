@@ -1,0 +1,15 @@
+PekarchOS
+Copyright (C) 2026 Pekapro
+
+Los scripts de este repositorio (perfil, instalador, construcción de la ISO
+y el flujo de GitHub Actions) se publican bajo la licencia GPL-3.0-or-later.
+
+Los gráficos originales (logotipo, fondo, splash y tema visual) se publican
+bajo CC0-1.0: se pueden copiar, modificar y redistribuir sin pedir permiso.
+
+El perfil de arranque parte de releng, que acompaña a archiso
+(GPL-3.0-or-later, Arch Linux). La ISO resultante también incluye paquetes
+de Arch Linux con sus propias licencias.
+
+Texto completo de la GPL-3.0: https://www.gnu.org/licenses/gpl-3.0.html
+Texto de CC0-1.0: https://creativecommons.org/publicdomain/zero/1.0/

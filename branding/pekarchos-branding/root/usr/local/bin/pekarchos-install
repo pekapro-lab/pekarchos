@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+# Instalador de PekarchOS. El disco y las contraseñas los elige quien instala.
+set -euo pipefail
+
+if [[ "${EUID}" -ne 0 ]]; then
+	exec sudo -- "$0" "$@"
+fi
+
+if [[ ! -d /run/archiso ]]; then
+	cat <<'EOF'
+Este instalador solo se usa desde la ISO en vivo de PekarchOS.
+En un sistema ya instalado no hace nada: arranca otra vez con la ISO
+si quieres reinstalar.
+EOF
+	exit 1
+fi
+
+cat <<'EOF'
+PekarchOS
+=========
+
+Este medio instala con archinstall, el instalador oficial de Arch Linux.
+Calamares no está en los repositorios oficiales: vive en el AUR y arrastra
+otra dependencia del AUR (el empaquetado actual). No forma parte de esta ISO
+para que se pueda construir solo con core y extra.
+
+El perfil ya trae, si archinstall lo acepta:
+
+  Idioma del instalador:  español
+  Locale:                 es_ES.UTF-8
+  Teclado:                es
+  Zona horaria:           Europe/Madrid
+  Escritorio:             KDE Plasma (plasma-desktop) + SDDM
+  Audio:                  PipeWire
+  Red:                    NetworkManager
+  Bluetooth y CUPS:       activados
+  Gráficos:               controladores libres (Mesa / Vulkan)
+  Arranque:               GRUB (sirve en BIOS y en UEFI)
+  Hostname:               pekarchos
+  Paquetes extra:         Firefox, LibreOffice, VLC, GIMP y el resto del live
+
+El disco, el esquema de particiones y las contraseñas NO están rellenados.
+Hay que elegirlos en el menú. Revisa el resumen antes de confirmar.
+
+AVISO
+-----
+Instalar puede borrar particiones enteras. Haz una copia de seguridad
+de cualquier disco que no quieras perder. Si dudas del dispositivo,
+cancela con Ctrl+C.
+
+Hace falta red: archinstall descarga los paquetes, no copia este live.
+EOF
+
+read -r -p "Pulsa Intro para abrir archinstall, o Ctrl+C para cancelar... " _
+
+config=/usr/share/pekarchos/archinstall.json
+if [[ -f "${config}" ]]; then
+	set +e
+	archinstall --config "${config}" --skip-version-check
+	status=$?
+	set -e
+	if [[ "${status}" -eq 0 ]]; then
+		exit 0
+	fi
+	echo
+	echo "archinstall terminó con código ${status}."
+	echo "Si el perfil precargado no vale para esta versión, se abre el instalador vacío."
+	echo "Elige a mano: KDE Plasma, es_ES, teclado es, Europe/Madrid, PipeWire, NetworkManager."
+	read -r -p "Pulsa Intro para continuar, o Ctrl+C para salir... " _
+fi
+
+exec archinstall --skip-version-check

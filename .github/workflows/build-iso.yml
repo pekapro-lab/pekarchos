@@ -1,0 +1,118 @@
+name: Construir ISO de PekarchOS
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: pekarchos-iso-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  iso:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - name: Obtener el código
+        uses: actions/checkout@v4
+
+      - name: Liberar disco del runner
+        run: |
+          set -eux
+          sudo rm -rf \
+            /usr/share/dotnet \
+            /usr/local/lib/android \
+            /opt/ghc \
+            /opt/hostedtoolcache \
+            /usr/local/share/boost \
+            /usr/share/swift \
+            /usr/local/.ghcup \
+            /usr/share/miniconda \
+            /usr/local/lib/node_modules \
+            /usr/local/share/powershell \
+            /usr/local/share/chromium \
+            /usr/local/julia* \
+            || true
+          sudo docker image prune -af || true
+          df -h
+
+      - name: Construir la ISO
+        run: |
+          set -eux
+          mkdir -p out
+          docker run --privileged --rm \
+            -v "$PWD":/src:ro \
+            -v "$PWD/out":/out \
+            -e ISO_OUT=/out \
+            archlinux:latest \
+            bash /src/scripts/build-iso.sh
+          ls -lh out
+          df -h
+
+      - name: Subir el artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: pekarchos-iso
+          path: |
+            out/*.iso
+            out/*.iso.part*
+            out/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+      - name: Publicar en la release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          iso=$(echo out/*.iso)
+          notes="${RUNNER_TEMP}/notas.md"
+          name="$(basename "${iso}")"
+          {
+            echo "ISO de PekarchOS construida desde ${GITHUB_SHA}."
+            echo
+            echo "El repositorio es privado. Esta release solo la ve quien tiene acceso."
+            echo
+            echo "Usuario del medio en vivo: live / live (entra solo al escritorio Plasma)."
+            echo "Antes de instalar, haz una copia de seguridad."
+            echo
+            echo "Comprueba la descarga con SHA256SUMS."
+            echo
+            echo "Si el archivo pasa de 2 GiB, GitHub no admite un solo asset y la ISO va en partes."
+            echo "Para unirlas: cat ${name}.part* > ${name}"
+          } >"${notes}"
+
+          max=$((2 * 1024 * 1024 * 1024 - 1024 * 1024))
+          size=$(stat -c%s "${iso}")
+          assets=("${iso}" out/SHA256SUMS)
+          if (( size >= max )); then
+            echo "La ISO ocupa ${size} bytes; se parte para el límite de 2 GiB de las releases."
+            split -b 1900M -d --additional-suffix=.bin "${iso}" "out/$(basename "${iso}").part"
+            assets=()
+            for part in out/*.part*.bin; do
+              assets+=("${part}")
+            done
+            assets+=(out/SHA256SUMS)
+          fi
+
+          if gh release view "${tag}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            gh release upload "${tag}" --repo "${GITHUB_REPOSITORY}" --clobber "${assets[@]}"
+          else
+            gh release create "${tag}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --title "PekarchOS ${tag}" \
+              --notes-file "${notes}" \
+              "${assets[@]}"
+          fi

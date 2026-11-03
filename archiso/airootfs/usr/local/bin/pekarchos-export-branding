@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Deja la marca visible en /run para que arch-chroot del instalador pueda verla.
+set -euo pipefail
+
+mkdir -p /run/pekarchos
+if ! mountpoint -q /run/pekarchos; then
+	mount --bind /usr/share/pekarchos /run/pekarchos
+fi

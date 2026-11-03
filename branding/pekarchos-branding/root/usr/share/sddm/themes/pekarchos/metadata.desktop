@@ -1,0 +1,14 @@
+[SddmGreeterTheme]
+Name=PekarchOS
+Description=Tema neón de PekarchOS
+Author=Pekapro
+Copyright=(C) Pekapro, CC0-1.0
+License=CC0-1.0
+Type=sddm-theme
+Version=0.1.0
+Website=https://github.com/pekapro-lab/pekarchos
+MainScript=Main.qml
+ConfigFile=theme.conf
+Screenshot=preview.png
+Theme-Id=pekarchos
+Theme-API=2.0

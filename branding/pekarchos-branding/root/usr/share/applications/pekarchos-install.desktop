@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Instalar PekarchOS
+GenericName=Instalar el sistema
+Comment=Abrir archinstall con el perfil de PekarchOS
+Exec=/usr/bin/konsole --hold -e /usr/local/bin/pekarchos-install
+Icon=/usr/share/pekarchos/logo.png
+Terminal=false
+Categories=System;
+StartupNotify=true

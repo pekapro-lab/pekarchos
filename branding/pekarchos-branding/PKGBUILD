@@ -1,0 +1,20 @@
+# Maintainer: Pekapro
+pkgname=pekarchos-branding
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='Marca, fondo de pantalla y ajustes visuales de PekarchOS'
+arch=(any)
+url='https://github.com/pekapro-lab/pekarchos'
+license=('CC0-1.0' 'GPL-3.0-or-later')
+depends=('bash')
+install="${pkgname}.install"
+options=('!debug')
+sha256sums=()
+
+package() {
+	cp -a "${startdir}/root/." "${pkgdir}/"
+	if compgen -G "${pkgdir}/usr/local/bin/*" >/dev/null; then
+		chmod 755 "${pkgdir}/usr/local/bin/"*
+	fi
+	find "${pkgdir}" -type d -exec chmod 755 {} +
+}
