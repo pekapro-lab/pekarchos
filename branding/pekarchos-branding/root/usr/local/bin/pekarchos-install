@@ -1,72 +1,436 @@
 #!/usr/bin/env bash
-# Instalador de PekarchOS. El disco y las contraseñas los elige quien instala.
+# Instalador de PekarchOS: copia el sistema en vivo tal cual al disco.
+# Lo instalado queda igual que el live (neón, iconos, programas), sin red.
+# Opción de reserva: pekarchos-install --archinstall (Arch limpio con archinstall).
 set -euo pipefail
 
 if [[ "${EUID}" -ne 0 ]]; then
 	exec sudo -- "$0" "$@"
 fi
 
+if [[ "${1:-}" == "--archinstall" ]]; then
+	exec /usr/local/bin/pekarchos-install-archinstall
+fi
+
+TARGET=/mnt/pekarchos
+LOG=/var/log/pekarchos-install.log
+BOOTMNT=/run/archiso/bootmnt
+ESP_TYPE=c12a7328-f81f-11d2-ba4b-00a0c93ec93b
+n=""; opcion=""; r=""; r2=""; USUARIO=""; NOMBRE=""
+
 if [[ ! -d /run/archiso ]]; then
-	cat <<'EOF'
-Este instalador solo se usa desde la ISO en vivo de PekarchOS.
-En un sistema ya instalado no hace nada: arranca otra vez con la ISO
-si quieres reinstalar.
-EOF
+	echo "Este instalador solo funciona desde la ISO en vivo de PekarchOS."
 	exit 1
 fi
 
-cat <<'EOF'
-PekarchOS
-=========
+exec > >(tee -a "${LOG}") 2>&1
 
-Este medio instala con archinstall, el instalador oficial de Arch Linux.
-Calamares no está en los repositorios oficiales: vive en el AUR y arrastra
-otra dependencia del AUR (el empaquetado actual). No forma parte de esta ISO
-para que se pueda construir solo con core y extra.
-
-El perfil ya trae, si archinstall lo acepta:
-
-  Idioma del instalador:  español
-  Locale:                 es_ES.UTF-8
-  Teclado:                es
-  Zona horaria:           Europe/Madrid
-  Escritorio:             KDE Plasma (plasma-desktop) + SDDM
-  Audio:                  PipeWire
-  Red:                    NetworkManager
-  Bluetooth y CUPS:       activados
-  Gráficos:               controladores libres (Mesa / Vulkan)
-  Arranque:               GRUB (sirve en BIOS y en UEFI)
-  Hostname:               pekarchos
-  Paquetes extra:         Firefox, LibreOffice, VLC, GIMP y el resto del live
-
-El disco, el esquema de particiones y las contraseñas NO están rellenados.
-Hay que elegirlos en el menú. Revisa el resumen antes de confirmar.
-
-AVISO
------
-Instalar puede borrar particiones enteras. Haz una copia de seguridad
-de cualquier disco que no quieras perder. Si dudas del dispositivo,
-cancela con Ctrl+C.
-
-Hace falta red: archinstall descarga los paquetes, no copia este live.
-EOF
-
-read -r -p "Pulsa Intro para abrir archinstall, o Ctrl+C para cancelar... " _
-
-config=/usr/share/pekarchos/archinstall.json
-if [[ -f "${config}" ]]; then
-	set +e
-	archinstall --config "${config}" --skip-version-check
-	status=$?
-	set -e
-	if [[ "${status}" -eq 0 ]]; then
-		exit 0
-	fi
+die() {
 	echo
-	echo "archinstall terminó con código ${status}."
-	echo "Si el perfil precargado no vale para esta versión, se abre el instalador vacío."
-	echo "Elige a mano: KDE Plasma, es_ES, teclado es, Europe/Madrid, PipeWire, NetworkManager."
-	read -r -p "Pulsa Intro para continuar, o Ctrl+C para salir... " _
+	echo "ERROR: $*"
+	echo "No se ha terminado la instalación. Registro completo: ${LOG}"
+	exit 1
+}
+trap 'die "falló la orden en la línea ${LINENO}"' ERR
+
+pregunta() { # pregunta "texto" variable
+	local _r
+	read -r -p "$1 " _r
+	printf -v "$2" '%s' "${_r}"
+}
+
+confirmar_escribiendo() { # confirmar_escribiendo PALABRA
+	local r
+	read -r -p "Escribe ${1} (en mayúsculas) para continuar, o cualquier otra cosa para cancelar: " r
+	[[ "${r}" == "$1" ]] || { echo "Cancelado. No se ha tocado nada."; exit 0; }
+}
+
+part_name() { # part_name /dev/sda 1 -> /dev/sda1 ; /dev/nvme0n1 1 -> /dev/nvme0n1p1
+	if [[ "$1" =~ [0-9]$ ]]; then echo "${1}p${2}"; else echo "${1}${2}"; fi
+}
+
+limpiar_montajes() {
+	if mountpoint -q "${TARGET}"; then
+		umount -R "${TARGET}" || true
+	fi
+}
+
+clear || true
+cat <<'TXT'
+==============================================
+            Instalar PekarchOS
+==============================================
+
+Este instalador copia al disco el mismo PekarchOS que estás usando
+ahora: escritorio neón, iconos, bienvenida y todos los programas.
+No hace falta internet.
+
+AVISO IMPORTANTE
+----------------
+Instalar puede BORRAR datos. Haz antes una copia de seguridad.
+Si tienes Windows y quieres conservarlo, elige la opción de
+instalar en una partición ya creada (hazle hueco antes desde
+Windows con «Administración de discos»).
+
+Puedes cancelar en cualquier momento con Ctrl+C antes de confirmar.
+TXT
+echo
+
+if [[ -d /sys/firmware/efi ]]; then
+	MODO=uefi
+	echo "Arranque detectado: UEFI"
+else
+	MODO=bios
+	echo "Arranque detectado: BIOS (legacy)"
+fi
+echo
+
+# Disco donde está el propio live, para no ofrecerlo.
+live_disk=""
+if mountpoint -q "${BOOTMNT}"; then
+	live_src=$(findmnt -no SOURCE "${BOOTMNT}" || true)
+	if [[ -n "${live_src}" ]]; then
+		live_disk=$(lsblk -no PKNAME "${live_src}" 2>/dev/null | head -n1 || true)
+		[[ -z "${live_disk}" ]] && live_disk=$(basename "${live_src}")
+	fi
 fi
 
-exec archinstall --skip-version-check
+echo "Discos disponibles:"
+mapfile -t discos < <(lsblk -dpno NAME,TYPE | awk '$2=="disk"{print $1}' | grep -v -e '/dev/loop' -e '/dev/zram' -e '/dev/sr' || true)
+validos=()
+for d in "${discos[@]}"; do
+	[[ -n "${live_disk}" && "$(basename "${d}")" == "${live_disk}" ]] && continue
+	validos+=("${d}")
+done
+[[ ${#validos[@]} -gt 0 ]] || die "no hay ningún disco donde instalar."
+i=1
+for d in "${validos[@]}"; do
+	printf '  %d) %s  %s  %s\n' "${i}" "${d}" "$(lsblk -dno SIZE "${d}")" "$(lsblk -dno MODEL "${d}" | sed 's/ *$//')"
+	i=$((i + 1))
+done
+echo
+pregunta "Número del disco:" n
+[[ "${n}" =~ ^[0-9]+$ && "${n}" -ge 1 && "${n}" -le ${#validos[@]} ]] || die "número de disco no válido."
+DISCO="${validos[$((n - 1))]}"
+echo
+lsblk -o NAME,SIZE,FSTYPE,LABEL,PARTTYPENAME,MOUNTPOINTS "${DISCO}"
+echo
+cat <<'TXT'
+¿Cómo quieres instalar?
+  1) Borrar TODO el disco e instalar PekarchOS solo
+  2) Instalar en una partición que ya existe (para convivir con Windows u otro sistema)
+TXT
+pregunta "Opción (1 o 2):" opcion
+
+ESP=""
+ROOT=""
+case "${opcion}" in
+1)
+	echo
+	echo "Se borrará TODO lo que hay en ${DISCO} ($(lsblk -dno SIZE "${DISCO}"))."
+	confirmar_escribiendo BORRAR
+	swapoff -a || true
+	for p in $(lsblk -lnpo NAME "${DISCO}" | tail -n +2); do umount "${p}" 2>/dev/null || true; done
+	wipefs -af "${DISCO}"
+	if [[ "${MODO}" == uefi ]]; then
+		sfdisk --label gpt "${DISCO}" <<SF
+size=1GiB, type=U, name="EFI"
+type=L, name="PekarchOS"
+SF
+	else
+		sfdisk --label gpt "${DISCO}" <<SF
+size=1MiB, type=21686148-6F49-4E6F-A580-576F6E6F6F6C, name="BIOS"
+type=L, name="PekarchOS"
+SF
+	fi
+	partprobe "${DISCO}" 2>/dev/null || true
+	udevadm settle
+	sleep 1
+	if [[ "${MODO}" == uefi ]]; then
+		ESP=$(part_name "${DISCO}" 1)
+		mkfs.fat -F 32 -n EFI "${ESP}"
+	fi
+	ROOT=$(part_name "${DISCO}" 2)
+	;;
+2)
+	echo
+	echo "Particiones de ${DISCO}:"
+	mapfile -t parts < <(lsblk -lnpo NAME,TYPE "${DISCO}" | awk '$2=="part"{print $1}')
+	[[ ${#parts[@]} -gt 0 ]] || die "${DISCO} no tiene particiones. Créalas antes (por ejemplo con KDE Partition Manager) o usa la opción 1."
+	i=1
+	for p in "${parts[@]}"; do
+		printf '  %d) %-16s %8s  %-6s %s\n' "${i}" "${p}" "$(lsblk -dno SIZE "${p}")" "$(lsblk -dno FSTYPE "${p}")" "$(lsblk -dno PARTTYPENAME "${p}")"
+		i=$((i + 1))
+	done
+	echo
+	echo "Elige la partición para PekarchOS (se formateará; mínimo 30 GB recomendado)."
+	echo "NO elijas la de Windows (NTFS) ni la EFI."
+	pregunta "Número de la partición:" n
+	[[ "${n}" =~ ^[0-9]+$ && "${n}" -ge 1 && "${n}" -le ${#parts[@]} ]] || die "número no válido."
+	ROOT="${parts[$((n - 1))]}"
+	ptype=$(lsblk -dno PARTTYPE "${ROOT}" | tr 'A-F' 'a-f')
+	[[ "${ptype}" != "${ESP_TYPE}" ]] || die "esa es la partición EFI; no se puede usar como raíz."
+	fs=$(lsblk -dno FSTYPE "${ROOT}")
+	if [[ "${fs}" == ntfs || "${fs}" == BitLocker ]]; then
+		echo "¡OJO! ${ROOT} es ${fs}: parece de Windows y se perdería."
+	fi
+	if [[ "${MODO}" == uefi ]]; then
+		# Reutiliza la partición EFI que ya existe (la de Windows) SIN formatearla.
+		mapfile -t esps < <(lsblk -lnpo NAME,PARTTYPE "${DISCO}" | awk -v t="${ESP_TYPE}" 'tolower($2)==t{print $1}')
+		if [[ ${#esps[@]} -eq 0 ]]; then
+			mapfile -t esps < <(lsblk -lnpo NAME,PARTTYPE | awk -v t="${ESP_TYPE}" 'tolower($2)==t{print $1}')
+		fi
+		[[ ${#esps[@]} -gt 0 ]] || die "no hay partición EFI. Con arranque UEFI hace falta una (Windows siempre la tiene)."
+		if [[ ${#esps[@]} -eq 1 ]]; then
+			ESP="${esps[0]}"
+		else
+			echo "Hay varias particiones EFI:"
+			i=1
+			for p in "${esps[@]}"; do printf '  %d) %s %s\n' "${i}" "${p}" "$(lsblk -dno SIZE "${p}")"; i=$((i + 1)); done
+			pregunta "¿Cuál uso?" n
+			[[ "${n}" =~ ^[0-9]+$ && "${n}" -ge 1 && "${n}" -le ${#esps[@]} ]] || die "número no válido."
+			ESP="${esps[$((n - 1))]}"
+		fi
+		echo "Se usará la partición EFI ${ESP} SIN formatearla (Windows sigue arrancando)."
+	fi
+	echo
+	echo "Se BORRARÁ todo el contenido de ${ROOT} ($(lsblk -dno SIZE "${ROOT}"))."
+	confirmar_escribiendo BORRAR
+	umount "${ROOT}" 2>/dev/null || true
+	;;
+*)
+	die "opción no válida."
+	;;
+esac
+
+echo
+echo "== Tu usuario =="
+while true; do
+	pregunta "Nombre de usuario (minúsculas, sin espacios):" USUARIO
+	[[ "${USUARIO}" =~ ^[a-z_][a-z0-9_-]{0,31}$ && "${USUARIO}" != root && "${USUARIO}" != live ]] && break
+	echo "Nombre no válido. Usa letras minúsculas, números, - o _."
+done
+pregunta "Nombre completo (opcional):" NOMBRE
+while true; do
+	read -r -s -p "Contraseña: " PASS1; echo
+	read -r -s -p "Repite la contraseña: " PASS2; echo
+	[[ -n "${PASS1}" && "${PASS1}" == "${PASS2}" ]] && break
+	echo "No coinciden o están vacías. Otra vez."
+done
+ROOTPASS=""
+pregunta "¿Poner contraseña a root? (s/N):" r
+if [[ "${r}" =~ ^[sS] ]]; then
+	while true; do
+		read -r -s -p "Contraseña de root: " ROOTPASS; echo
+		read -r -s -p "Repite: " r2; echo
+		[[ -n "${ROOTPASS}" && "${ROOTPASS}" == "${r2}" ]] && break
+		echo "No coinciden. Otra vez."
+	done
+fi
+
+echo
+echo "Resumen:"
+echo "  Arranque:   ${MODO}"
+echo "  Disco:      ${DISCO}"
+echo "  Raíz ext4:  ${ROOT} (se formatea)"
+if [[ -n "${ESP}" ]]; then echo "  EFI:        ${ESP} (montada en /boot/efi, no se formatea en la opción 2)"; fi
+echo "  Usuario:    ${USUARIO} (administrador con sudo)"
+echo
+confirmar_escribiendo INSTALAR
+
+trap 'limpiar_montajes; die "falló la orden en la línea ${LINENO}"' ERR
+
+echo "==> Formateando ${ROOT} como ext4"
+mkfs.ext4 -F -L PekarchOS "${ROOT}"
+mkdir -p "${TARGET}"
+mount "${ROOT}" "${TARGET}"
+if [[ -n "${ESP}" ]]; then
+	mkdir -p "${TARGET}/boot/efi"
+	mount "${ESP}" "${TARGET}/boot/efi"
+fi
+
+echo "==> Copiando PekarchOS al disco (tarda unos minutos)"
+sfs=$(find "${BOOTMNT}" -name airootfs.sfs 2>/dev/null | head -n1 || true)
+if mountpoint -q /run/archiso/airootfs; then
+	# La imagen squashfs original, ya montada por archiso: sin cambios del live.
+	rsync -aAXH --info=progress2 /run/archiso/airootfs/ "${TARGET}/"
+elif [[ -n "${sfs}" ]] && command -v unsquashfs >/dev/null; then
+	unsquashfs -f -d "${TARGET}" "${sfs}"
+else
+	rsync -aAXH --info=progress2 \
+		--exclude='/dev/*' --exclude='/proc/*' --exclude='/sys/*' --exclude='/run/*' \
+		--exclude='/tmp/*' --exclude='/mnt/*' --exclude='/media/*' --exclude='/lost+found' \
+		--exclude='/var/cache/pacman/pkg/*' --exclude='/var/log/*' \
+		/ "${TARGET}/"
+fi
+mkdir -p "${TARGET}"/{dev,proc,sys,run,tmp,mnt,boot}
+chmod 1777 "${TARGET}/tmp"
+
+echo "==> Núcleo"
+kver=$(ls "${TARGET}/usr/lib/modules" | head -n1)
+if [[ -f "${TARGET}/usr/lib/modules/${kver}/vmlinuz" ]]; then
+	install -m644 "${TARGET}/usr/lib/modules/${kver}/vmlinuz" "${TARGET}/boot/vmlinuz-linux"
+else
+	kernel=$(find "${BOOTMNT}" -name vmlinuz-linux 2>/dev/null | head -n1 || true)
+	[[ -n "${kernel}" ]] || die "no encuentro el núcleo vmlinuz-linux."
+	install -m644 "${kernel}" "${TARGET}/boot/vmlinuz-linux"
+fi
+for uc in "${BOOTMNT}"/*/boot/*-ucode.img "${BOOTMNT}"/boot/*-ucode.img; do
+	if [[ -f "${uc}" && ! -f "${TARGET}/boot/$(basename "${uc}")" ]]; then
+		install -m644 "${uc}" "${TARGET}/boot/"
+	fi
+done
+
+echo "==> Quitando lo que solo sirve en el live"
+T="${TARGET}"
+rm -f "${T}/etc/mkinitcpio.conf.d/archiso.conf"
+cat >"${T}/etc/mkinitcpio.d/linux.preset" <<'PRESET'
+# mkinitcpio preset file for the 'linux' package
+ALL_kver="/boot/vmlinuz-linux"
+PRESETS=('default' 'fallback')
+default_image="/boot/initramfs-linux.img"
+fallback_image="/boot/initramfs-linux-fallback.img"
+fallback_options="-S autodetect"
+PRESET
+rm -f "${T}/etc/sddm.conf.d/10-autologin.conf" "${T}/etc/sudoers.d/live"
+rm -rf "${T}/etc/systemd/system/getty@tty1.service.d"
+for u in pacman-init.service choose-mirror.service livecd-talk.service livecd-alsa-unmuter.service \
+	etc-pacman.d-gnupg.mount pekarchos-export-branding.service reflector.service; do
+	find "${T}/etc/systemd/system" -name "${u}" \( -type l -o -path "*.wants/*" \) -delete 2>/dev/null || true
+	case "${u}" in
+	pacman-init.service | choose-mirror.service | livecd-*.service | etc-pacman.d-gnupg.mount | pekarchos-export-branding.service)
+		rm -f "${T}/etc/systemd/system/${u}" ;;
+	esac
+done
+rm -f "${T}/etc/systemd/journald.conf.d/volatile-storage.conf" \
+	"${T}/etc/systemd/logind.conf.d/do-not-suspend.conf" \
+	"${T}/etc/ssh/sshd_config.d/10-archiso.conf" \
+	"${T}/root/.automated_script.sh" "${T}/root/.zlogin" "${T}/root/customize_airootfs.sh" \
+	"${T}/usr/local/bin/choose-mirror" "${T}/usr/local/bin/Installation_guide" "${T}/usr/local/bin/livecd-sound" \
+	"${T}/usr/local/bin/pekarchos-export-branding" \
+	"${T}/usr/share/applications/pekarchos-install.desktop"
+rm -rf "${T}/usr/share/pekarchos/repo" "${T}/etc/pacman.d/gnupg"
+printf 'PekarchOS — basado en Arch Linux. Hecho por Pekapro.\n' >"${T}/etc/motd"
+printf 'PekarchOS \\r (\\l)\n\n' >"${T}/etc/issue"
+
+echo "==> Configuración del sistema"
+: >"${T}/etc/machine-id"
+rm -f "${T}/var/lib/dbus/machine-id"
+printf 'pekarchos\n' >"${T}/etc/hostname"
+printf 'LANG=es_ES.UTF-8\nLC_TIME=es_ES.UTF-8\n' >"${T}/etc/locale.conf"
+printf 'KEYMAP=es\nFONT=lat9w-16\n' >"${T}/etc/vconsole.conf"
+ln -sfn /usr/share/zoneinfo/Europe/Madrid "${T}/etc/localtime"
+install -d "${T}/etc/X11/xorg.conf.d"
+cat >"${T}/etc/X11/xorg.conf.d/00-keyboard.conf" <<'KB'
+Section "InputClass"
+    Identifier "system-keyboard"
+    MatchIsKeyboard "on"
+    Option "XkbLayout" "es"
+    Option "XkbModel" "pc105"
+EndSection
+KB
+
+# pacman: multilib sí, repositorio local del live no; mirrors del live si los hay.
+sed -i '/^\[pekarchos\]/,/^$/d' "${T}/etc/pacman.conf"
+if grep -q '^#\[multilib\]' "${T}/etc/pacman.conf"; then
+	sed -i '/^#\[multilib\]$/{s/^#//;n;s/^#Include/Include/}' "${T}/etc/pacman.conf"
+elif ! grep -q '^\[multilib\]' "${T}/etc/pacman.conf"; then
+	printf '\n[multilib]\nInclude = /etc/pacman.d/mirrorlist\n' >>"${T}/etc/pacman.conf"
+fi
+if grep -q '^Server' /etc/pacman.d/mirrorlist 2>/dev/null; then
+	cp /etc/pacman.d/mirrorlist "${T}/etc/pacman.d/mirrorlist"
+elif ! grep -q '^Server' "${T}/etc/pacman.d/mirrorlist"; then
+	printf 'Server = https://geo.mirror.pkgbuild.com/$repo/os/$arch\n' >>"${T}/etc/pacman.d/mirrorlist"
+fi
+
+genfstab -U "${T}" >"${T}/etc/fstab"
+
+echo "==> Dentro del sistema nuevo"
+cat >"${T}/root/pekarchos-chroot.sh" <<'CHROOT'
+#!/usr/bin/env bash
+set -euo pipefail
+USUARIO="$1"; NOMBRE="$2"; MODO="$3"; DISCO="$4"; OPCION="$5"
+
+sed -i 's/^#\s*\(es_ES.UTF-8 UTF-8\)/\1/; s/^#\s*\(en_US.UTF-8 UTF-8\)/\1/' /etc/locale.gen
+locale-gen
+systemd-machine-id-setup >/dev/null 2>&1 || true
+
+# Usuario live fuera.
+if id live >/dev/null 2>&1; then
+	userdel -r live 2>/dev/null || userdel live || true
+fi
+rm -rf /home/live
+
+grupos=()
+for g in wheel audio video optical storage network lp scanner users render input; do
+	getent group "$g" >/dev/null && grupos+=("$g")
+done
+useradd -m -G "$(IFS=,; echo "${grupos[*]}")" -s /bin/bash -c "${NOMBRE}" "${USUARIO}"
+for d in Escritorio Desktop; do
+	install -d -o "${USUARIO}" -g "${USUARIO}" "/home/${USUARIO}/${d}"
+	if [[ -f /usr/share/applications/pekarchos-welcome.desktop ]]; then
+		install -m755 -o "${USUARIO}" -g "${USUARIO}" /usr/share/applications/pekarchos-welcome.desktop "/home/${USUARIO}/${d}/"
+	fi
+done
+install -d -m 0750 /etc/sudoers.d
+printf '%%wheel ALL=(ALL:ALL) ALL\n' >/etc/sudoers.d/10-wheel
+chmod 0440 /etc/sudoers.d/10-wheel
+visudo -cf /etc/sudoers.d/10-wheel
+
+# Llavero de pacman (en el live vivía en memoria).
+pacman-key --init
+pacman-key --populate archlinux || true
+
+# initramfs normal (sin los hooks de archiso).
+mkinitcpio -P
+
+activar() { systemctl list-unit-files "$1" >/dev/null 2>&1 && systemctl enable "$1" || true; }
+activar NetworkManager.service
+activar bluetooth.service
+activar cups.socket
+activar power-profiles-daemon.service
+activar systemd-timesyncd.service
+systemctl enable sddm.service
+systemctl set-default graphical.target
+
+# GRUB con Windows detectado por os-prober.
+sed -i 's/^#\?GRUB_DISABLE_OS_PROBER=.*/GRUB_DISABLE_OS_PROBER=false/' /etc/default/grub
+grep -q '^GRUB_DISABLE_OS_PROBER=false' /etc/default/grub || echo 'GRUB_DISABLE_OS_PROBER=false' >>/etc/default/grub
+sed -i 's/^GRUB_DISTRIBUTOR=.*/GRUB_DISTRIBUTOR="PekarchOS"/' /etc/default/grub
+sed -i 's/^GRUB_TIMEOUT=.*/GRUB_TIMEOUT=5/' /etc/default/grub
+if [[ "${MODO}" == uefi ]]; then
+	grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=PekarchOS --recheck
+	# Copia de reserva en \EFI\BOOT solo con el disco entero: con Windows no se pisa.
+	if [[ "${OPCION}" == 1 ]]; then
+		grub-install --target=x86_64-efi --efi-directory=/boot/efi --removable --no-nvram || true
+	fi
+else
+	grub-install --target=i386-pc --recheck "${DISCO}"
+fi
+grub-mkconfig -o /boot/grub/grub.cfg
+CHROOT
+chmod 755 "${T}/root/pekarchos-chroot.sh"
+arch-chroot "${T}" /root/pekarchos-chroot.sh "${USUARIO}" "${NOMBRE}" "${MODO}" "${DISCO}" "${opcion}"
+rm -f "${T}/root/pekarchos-chroot.sh"
+
+printf '%s:%s\n' "${USUARIO}" "${PASS1}" | arch-chroot "${T}" chpasswd
+if [[ -n "${ROOTPASS}" ]]; then
+	printf 'root:%s\n' "${ROOTPASS}" | arch-chroot "${T}" chpasswd
+else
+	arch-chroot "${T}" passwd -l root >/dev/null
+fi
+unset PASS1 PASS2 ROOTPASS
+
+cp "${LOG}" "${T}/var/log/pekarchos-install.log" 2>/dev/null || true
+sync
+limpiar_montajes
+trap - ERR
+
+cat <<'TXT'
+
+==============================================
+   ¡PekarchOS instalado!
+==============================================
+Quita el USB/ISO y reinicia. Entrarás con tu usuario y contraseña.
+Teclado: español. Si tienes Windows, aparecerá en el menú de GRUB.
+TXT

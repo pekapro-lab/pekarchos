@@ -21,14 +21,17 @@ for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
 		fi
 	fi
 	if [[ -x /usr/bin/plasma-apply-colorscheme ]]; then
-		plasma-apply-colorscheme PekarchOS >>"${log}" 2>&1 || true
+		plasma-apply-colorscheme PekarchOSNeonMagenta >>"${log}" 2>&1 || true
 	fi
 	if [[ "${wallpaper_ok}" -eq 1 ]]; then
 		if [[ -x /usr/bin/kwriteconfig6 ]]; then
 			kwriteconfig6 --file kdeglobals --group General --key AccentColor "255,43,214" || true
-			kwriteconfig6 --file kdeglobals --group General --key ColorScheme PekarchOS || true
+			kwriteconfig6 --file kdeglobals --group General --key ColorScheme PekarchOSNeonMagenta || true
 			kwriteconfig6 --file kdeglobals --group Icons --key Theme candy-icons || true
 			kwriteconfig6 --file kdeglobals --group KDE --key widgetStyle Breeze || true
+			kwriteconfig6 --file kwinrc --group org.kde.kdecoration2 --key library org.kde.kwin.aurorae || true
+			kwriteconfig6 --file kwinrc --group org.kde.kdecoration2 --key theme kwin4_decoration_qml_plastik || true
+			qdbus6 org.kde.KWin /KWin reconfigure >/dev/null 2>&1 || true
 		fi
 		touch "${flag}"
 		exit 0

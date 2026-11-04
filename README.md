@@ -46,22 +46,20 @@ Las traducciones de KDE van dentro de cada paquete: en los repos oficiales ya no
 
 ## Instalador
 
-El icono **Instalar PekarchOS** abre [archinstall](https://github.com/archlinux/archinstall) con un perfil de PekarchOS:
+El icono **Instalar PekarchOS** abre `pekarchos-install`, un instalador de terminal en español que **copia el live tal cual al disco** (como hacen EndeavourOS o Manjaro). Lo instalado queda igual que el live: tema neón (Neon Magenta), iconos Candy, bienvenida y todos los programas. No necesita internet.
 
-- idioma del instalador en español
-- locale `es_ES.UTF-8`, teclado `es`, zona `Europe/Madrid`
-- KDE Plasma (`plasma-desktop`) y SDDM
-- PipeWire, NetworkManager, Bluetooth y CUPS
-- controladores gráficos libres
-- GRUB, para que sirva igual en BIOS y en UEFI
-- hostname `pekarchos`
-- los mismos programas de arriba
+Pasos que ve el usuario:
 
-El disco y las contraseñas no vienen rellenados: hay que elegirlos en el menú y leer el resumen antes de confirmar. Hace falta red, porque archinstall descarga el sistema; no clona el live a ciegas.
+1. Aviso y detección de UEFI o BIOS.
+2. Elegir el disco (no se ofrece el propio USB del live).
+3. Elegir: **1)** borrar el disco entero (UEFI: EFI de 1 GiB + raíz ext4; BIOS: GPT con partición bios_grub + raíz) o **2)** instalar en una partición ya creada, para convivir con Windows. En UEFI se reutiliza la partición EFI existente **sin formatearla**.
+4. Escribir `BORRAR` para confirmar el formateo.
+5. Usuario, contraseña (dos veces) y, opcionalmente, contraseña de root (si no, root queda bloqueado).
+6. Resumen y escribir `INSTALAR`.
 
-Al terminar, un comando del perfil activa multilib e instala desde la ISO la marca, Chrome, DXVK, PlayOnLinux, FooBillard++, Steam y las librerías Vulkan de 32 bits.
+Después copia la imagen squashfs original (`/run/archiso/airootfs`), pone el núcleo en `/boot`, quita lo que solo sirve en el live (usuario `live`, autologin, sudo sin contraseña, servicios de archiso, repositorio local), regenera el initramfs normal, deja `es_ES.UTF-8`, teclado `es` (consola y X11/SDDM), `Europe/Madrid`, hostname `pekarchos`, multilib activado, y GRUB con os-prober para que aparezca Windows.
 
-**Calamares no entra en esta versión.** No está en los repositorios oficiales, solo en el AUR, y el empaquetado arrastra más piezas del AUR. Un instalador a medias sería peor que archinstall, que es el que Arch mantiene y el que ya usa el perfil `releng`.
+Alternativa: `sudo pekarchos-install --archinstall` instala un Arch limpio con archinstall (necesita red).
 
 ## Bienvenida
 
@@ -155,7 +153,7 @@ sudo dd if=pekarchos-AAAA.MM.DD-x86_64.iso of=/dev/sdX bs=4M status=progress con
 
 ## Copia de seguridad
 
-**Antes de instalar, copia lo que no quieras perder.** El instalador puede borrar un disco entero. Revisa el dispositivo en el resumen de archinstall. Si no estás seguro de cuál es, cancela.
+**Antes de instalar, copia lo que no quieras perder.** El instalador puede borrar un disco entero. Revisa el dispositivo en el resumen del instalador. Si no estás seguro de cuál es, cancela.
 
 El medio en vivo no toca los discos hasta que lo confirmas en el instalador.
 
