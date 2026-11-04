@@ -137,4 +137,22 @@ if command -v flatpak >/dev/null 2>&1; then
 		|| echo "No se pudo añadir Flathub; se puede hacer luego con flatpak remote-add."
 fi
 
-echo "==> PekarchOS live listo (sesión ${session})"
+browser=firefox.desktop
+if [[ -f /usr/share/applications/google-chrome.desktop ]]; then
+	browser=google-chrome.desktop
+fi
+cat >/etc/xdg/mimeapps.list <<EOF
+[Default Applications]
+text/html=${browser}
+application/xhtml+xml=${browser}
+x-scheme-handler/http=${browser}
+x-scheme-handler/https=${browser}
+x-scheme-handler/about=${browser}
+x-scheme-handler/unknown=${browser}
+EOF
+install -D -m 0644 /etc/xdg/mimeapps.list /etc/skel/.config/mimeapps.list
+if id live >/dev/null 2>&1; then
+	install -D -m 0644 -o live -g live /etc/xdg/mimeapps.list /home/live/.config/mimeapps.list
+fi
+
+echo "==> PekarchOS live listo (sesión ${session}, navegador ${browser})"

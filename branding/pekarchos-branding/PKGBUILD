@@ -1,6 +1,6 @@
 # Maintainer: Pekapro
 pkgname=pekarchos-branding
-pkgver=0.2.0
+pkgver=0.3.0
 pkgrel=1
 pkgdesc='Marca, iconos, bienvenida y ajustes visuales de PekarchOS'
 arch=(any)
@@ -15,6 +15,9 @@ package() {
 	cp -a "${startdir}/root/." "${pkgdir}/"
 	if compgen -G "${pkgdir}/usr/local/bin/*" >/dev/null; then
 		chmod 755 "${pkgdir}/usr/local/bin/"*
+	fi
+	if [[ -f "${pkgdir}/usr/share/pekarchos/postinstall.sh" ]]; then
+		chmod 755 "${pkgdir}/usr/share/pekarchos/postinstall.sh"
 	fi
 	find "${pkgdir}" -type d -exec chmod 755 {} +
 }

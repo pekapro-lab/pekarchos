@@ -127,4 +127,47 @@ fastfetch
 noto-fonts
 ttf-liberation
 ttf-dejavu
+
+# Internet. Chrome, DXVK, PlayOnLinux y FooBillard++ salen del repo local.
+falkon
+ktorrent
+google-chrome
+
+# Vídeo
+obs-studio
+kdenlive
+shotcut
+guvcview
+handbrake
+frei0r-plugins
+ffmpeg
+
+# Gráficos y captura. Spectacle ya está arriba.
+blender
+krita
+vokoscreen
+
+# Audio
+audacity
+hydrogen
+yoshimi
+elisa
+
+# Juegos y Vulkan de 32 bits (Vega / Steam). multilib va activo en pacman.conf.
+wine-staging
+lutris
+playonlinux
+steam
+foobillard++
+dxvk-bin
+winetricks
+gamemode
+lib32-gamemode
+mangohud
+lib32-mesa
+lib32-vulkan-radeon
+lib32-vulkan-intel
+lib32-vulkan-icd-loader
+lib32-vkd3d
+
 pekarchos-branding

@@ -4,7 +4,9 @@
   "hostname": "pekarchos",
   "timezone": "Europe/Madrid",
   "ntp": true,
-  "kernels": ["linux"],
+  "kernels": [
+    "linux"
+  ],
   "swap": {
     "enabled": true,
     "algorithm": "zstd"
@@ -26,7 +28,9 @@
   "profile_config": {
     "profile": {
       "main": "Desktop",
-      "details": ["KDE Plasma"],
+      "details": [
+        "KDE Plasma"
+      ],
       "custom_settings": {
         "KDE Plasma": {
           "plasma_flavor": "plasma-desktop"
@@ -50,7 +54,12 @@
       "power_management": "power-profiles-daemon"
     },
     "fonts_config": {
-      "fonts": ["noto-fonts", "noto-fonts-emoji", "ttf-liberation", "ttf-dejavu"]
+      "fonts": [
+        "noto-fonts",
+        "noto-fonts-emoji",
+        "ttf-liberation",
+        "ttf-dejavu"
+      ]
     }
   },
   "pacman_config": {
@@ -98,10 +107,31 @@
     "bluedevil",
     "plasma-nm",
     "plasma-pa",
-    "mesa-utils"
+    "mesa-utils",
+    "falkon",
+    "ktorrent",
+    "obs-studio",
+    "kdenlive",
+    "shotcut",
+    "guvcview",
+    "handbrake",
+    "frei0r-plugins",
+    "ffmpeg",
+    "blender",
+    "krita",
+    "vokoscreen",
+    "audacity",
+    "hydrogen",
+    "yoshimi",
+    "elisa",
+    "wine-staging",
+    "lutris",
+    "winetricks",
+    "gamemode",
+    "mangohud"
   ],
   "services": [],
   "custom_commands": [
-    "set -euo pipefail\nshopt -s nullglob\npkgs=(/run/pekarchos/repo/pekarchos-branding-*.pkg.tar.zst)\nif ((${#pkgs[@]})); then\n  pacman -U --noconfirm --needed \"${pkgs[@]}\"\nelse\n  echo 'Aviso: no está el paquete de marca en /run/pekarchos/repo' >&2\nfi\n"
+    "bash /run/pekarchos/postinstall.sh"
   ]
 }
