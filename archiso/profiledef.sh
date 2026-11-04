@@ -12,7 +12,7 @@ bootmodes=('bios.syslinux'
            'uefi.systemd-boot')
 pacman_conf="pacman.conf"
 airootfs_image_type="squashfs"
-airootfs_image_tool_options=('-comp' 'xz' '-Xbcj' 'x86' '-b' '1M' '-Xdict-size' '1M' '-processors' "$(nproc)")
+airootfs_image_tool_options=('-comp' 'zstd' '-Xcompression-level' '15' '-b' '1M' '-mem' '1G' '-processors' "$(nproc)")
 kernel_params_x86_64="console=tty0 console=ttyS0,115200"
 file_permissions=(
   ["/etc/shadow"]="0:0:400"
