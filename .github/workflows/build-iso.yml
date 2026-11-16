@@ -129,3 +129,13 @@ jobs:
               --notes-file "${notes}" \
               "${assets[@]}"
           fi
+
+  probar-instalador:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Obtener el código
+        uses: actions/checkout@v4
+
+      - name: Probar GRUB y el usuario en QEMU
+        run: bash scripts/test-install-qemu.sh

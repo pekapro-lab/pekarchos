@@ -52,12 +52,16 @@ Pasos que ve el usuario:
 
 1. Aviso y detección de UEFI o BIOS.
 2. Elegir el disco (no se ofrece el propio USB del live).
-3. Elegir: **1)** borrar el disco entero (UEFI: EFI de 1 GiB + raíz ext4; BIOS: GPT con partición bios_grub + raíz) o **2)** instalar en una partición ya creada, para convivir con Windows. En UEFI se reutiliza la partición EFI existente **sin formatearla**.
-4. Escribir `BORRAR` para confirmar el formateo.
-5. Usuario, contraseña (dos veces) y, opcionalmente, contraseña de root (si no, root queda bloqueado).
-6. Resumen y escribir `INSTALAR`.
+3. Elegir: **1)** borrar el disco entero o **2)** instalar en una partición ya creada, para convivir con Windows. En UEFI se reutiliza la partición EFI existente **sin formatearla**. En BIOS, un disco GPT tiene que tener partición BIOS boot; un disco MBR no.
+4. Usuario y contraseña, las dos obligatorias. Si se dejan vacías o no coinciden, vuelve a preguntar. root se bloquea salvo que se le ponga contraseña.
+5. Resumen. El disco sigue intacto.
+6. Escribir `BORRAR` y después `INSTALAR`.
 
-Después copia la imagen squashfs original (`/run/archiso/airootfs`), pone el núcleo en `/boot`, quita lo que solo sirve en el live (usuario `live`, autologin, sudo sin contraseña, servicios de archiso, repositorio local), regenera el initramfs normal, deja `es_ES.UTF-8`, teclado `es` (consola y X11/SDDM), `Europe/Madrid`, hostname `pekarchos`, multilib activado, y GRUB con os-prober para que aparezca Windows.
+Al borrar el disco entero: UEFI crea una GPT con EFI de 1 GiB (FAT, montada en `/boot/efi`; el núcleo sigue en `/boot`) y el resto ext4. BIOS crea una GPT con 1 MiB de partición BIOS boot (tipo `21686148-6449-6E6F-744E-656564454649`, sin formatear) y el resto ext4. Con `PEKARCHOS_PARTITION_LABEL=dos` el borrado BIOS usa MBR y GRUB en el sector de arranque.
+
+Después copia la imagen squashfs original (`/run/archiso/airootfs`), quita lo que solo sirve en el live (usuario `live`, autologin, sudo sin contraseña, servicios de archiso, repositorio local), crea la cuenta, comprueba que la contraseña autentica y que está en `wheel` con sudo, y solo entonces instala GRUB. En UEFI prueba `grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=PekarchOS` y, si la NVRAM falla o el disco es solo nuestro, escribe también la copia `--removable`. En BIOS usa `grub-install --target=i386-pc`. Luego `grub-mkconfig`. El teclado queda en español en la consola, en X11, en SDDM y en Plasma. Idioma `es_ES.UTF-8`, zona `Europe/Madrid`, hostname `pekarchos`, multilib activado y GRUB con os-prober para que aparezca Windows.
+
+Si algo falla, el mensaje es en español y el registro queda en `/var/log/pekarchos-install.log` (también copiado al disco de destino). No dice que la instalación ha terminado.
 
 Alternativa: `sudo pekarchos-install --archinstall` instala un Arch limpio con archinstall (necesita red).
 
@@ -187,7 +191,7 @@ python3 tools/generate_assets.py
 ## Limitaciones de esta versión
 
 - Es un rolling de Arch: la ISO es una foto del día en que se construyó.
-- El instalador necesita red.
+- `pekarchos-install` copia el live y no necesita red. `pekarchos-install --archinstall` sí la necesita.
 - No hay sesión X11 de Plasma en los repos oficiales ahora mismo.
 - En el live no van `linux-firmware-nvidia`, `linux-firmware-atheros`, `linux-firmware-mediatek` ni `linux-firmware-other`, ni la fuente de emoji: con el metapaquete entero la ISO pasa de 2 GiB y GitHub no admite ese asset en una release. Esos paquetes se instalan con pacman si el equipo los necesita. En el disco, archinstall sí instala el metapaquete `linux-firmware` completo.
 - El live tampoco lleva `open-vm-tools` ni las páginas de manual en español. El perfil de archinstall pide `noto-fonts-emoji` y `man-pages-es` para el sistema instalado.

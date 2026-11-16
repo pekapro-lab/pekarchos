@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Instalador de PekarchOS: copia el sistema en vivo tal cual al disco.
-# Lo instalado queda igual que el live (neón, iconos, programas), sin red.
-# Opción de reserva: pekarchos-install --archinstall (Arch limpio con archinstall).
+# El disco no se modifica hasta que se escribe INSTALAR.
+# La cuenta es obligatoria: sin ella SDDM no tiene usuario y el escritorio no entra.
 set -euo pipefail
 
 if [[ "${EUID}" -ne 0 ]]; then
@@ -15,47 +15,371 @@ fi
 TARGET=/mnt/pekarchos
 LOG=/var/log/pekarchos-install.log
 BOOTMNT=/run/archiso/bootmnt
-ESP_TYPE=c12a7328-f81f-11d2-ba4b-00a0c93ec93b
-n=""; opcion=""; r=""; r2=""; USUARIO=""; NOMBRE=""
+ESP_GUID=c12a7328-f81f-11d2-ba4b-00a0c93ec93b
+BIOS_GUID=21686148-6449-6e6f-744e-656564454649
+n=""
+opcion=""
+USUARIO=""
+NOMBRE=""
+PASS1=""
+ROOTPASS=""
+ROOT_BLOQUEADO=1
+ESP=""
+ROOT=""
+DISCO=""
+MODO=""
+EFI_DIR=""
+LIVE_DISCO=""
 
-if [[ ! -d /run/archiso ]]; then
-	echo "Este instalador solo funciona desde la ISO en vivo de PekarchOS."
-	exit 1
+mkdir -p /var/log
+touch "${LOG}"
+if command -v stdbuf >/dev/null 2>&1; then
+	exec > >(stdbuf -oL tee -a "${LOG}") 2>&1
+else
+	exec > >(tee -a "${LOG}") 2>&1
 fi
 
-exec > >(tee -a "${LOG}") 2>&1
-
 die() {
+	trap - ERR
 	echo
 	echo "ERROR: $*"
-	echo "No se ha terminado la instalación. Registro completo: ${LOG}"
+	echo "No se ha terminado la instalación. No arranques este disco como si estuviera listo."
+	echo "Registro completo: ${LOG}"
+	unset PASS1 ROOTPASS || true
+	if mountpoint -q "${TARGET}" 2>/dev/null; then
+		mkdir -p "${TARGET}/var/log" 2>/dev/null || true
+		cp "${LOG}" "${TARGET}/var/log/pekarchos-install.log" 2>/dev/null || true
+		sync || true
+	fi
+	if declare -F limpiar_montajes >/dev/null; then
+		limpiar_montajes || true
+	fi
 	exit 1
 }
-trap 'die "falló la orden en la línea ${LINENO}"' ERR
+trap 'die "falló la orden en la línea ${LINENO}: ${BASH_COMMAND}"' ERR
 
-pregunta() { # pregunta "texto" variable
+if [[ ! -d /run/archiso ]]; then
+	die "este instalador solo funciona desde la ISO en vivo de PekarchOS."
+fi
+
+usuario_valido() {
+	[[ "$1" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] || return 1
+	[[ "$1" != root && "$1" != live ]] || return 1
+}
+
+leer_linea() {
 	local _r
-	read -r -p "$1 " _r
+	if ! IFS= read -r -p "$1" _r; then
+		die "se cerró la entrada antes de responder."
+	fi
 	printf -v "$2" '%s' "${_r}"
 }
 
-confirmar_escribiendo() { # confirmar_escribiendo PALABRA
-	local r
-	read -r -p "Escribe ${1} (en mayúsculas) para continuar, o cualquier otra cosa para cancelar: " r
-	[[ "${r}" == "$1" ]] || { echo "Cancelado. No se ha tocado nada."; exit 0; }
+leer_secreto() {
+	local _r
+	if ! IFS= read -r -s -p "$1" _r; then
+		echo
+		die "se cerró la entrada antes de responder."
+	fi
+	echo
+	printf -v "$2" '%s' "${_r}"
 }
 
-part_name() { # part_name /dev/sda 1 -> /dev/sda1 ; /dev/nvme0n1 1 -> /dev/nvme0n1p1
-	if [[ "$1" =~ [0-9]$ ]]; then echo "${1}p${2}"; else echo "${1}${2}"; fi
+confirmar_escribiendo() {
+	local esperado="$1" r
+	if [[ "${PEKARCHOS_INSTALL_NONINTERACTIVE:-}" == 1 ]]; then
+		echo "Confirmación ${esperado} automática."
+		return 0
+	fi
+	leer_linea "Escribe ${esperado} (en mayúsculas) para continuar, o cualquier otra cosa para cancelar: " r
+	if [[ "${r}" != "${esperado}" ]]; then
+		echo "Cancelado. No se ha tocado el disco."
+		exit 0
+	fi
+}
+
+part_name() {
+	if [[ "$1" =~ [0-9]$ ]]; then
+		echo "${1}p${2}"
+	else
+		echo "${1}${2}"
+	fi
 }
 
 limpiar_montajes() {
-	if mountpoint -q "${TARGET}"; then
+	if mountpoint -q "${TARGET}" 2>/dev/null; then
 		umount -R "${TARGET}" || true
 	fi
 }
 
-clear || true
+esperar_nodo() {
+	local part="$1" i base mayor menor
+	for ((i = 0; i < 50; i++)); do
+		[[ -b "${part}" ]] && return 0
+		base=$(basename "${part}")
+		if [[ -r "/sys/class/block/${base}/dev" ]]; then
+			mayor=$(cut -d: -f1 "/sys/class/block/${base}/dev")
+			menor=$(cut -d: -f2 "/sys/class/block/${base}/dev")
+			mknod "${part}" b "${mayor}" "${menor}" 2>/dev/null || true
+		fi
+		[[ -b "${part}" ]] && return 0
+		sleep 0.1
+	done
+	echo "Dispositivos vistos tras particionar ${DISCO:-el disco}:"
+	lsblk "${DISCO:-}" || true
+	ls -l "${part%p[0-9]*}"* "${part%[0-9]}"* 2>/dev/null || true
+	die "no aparece el dispositivo ${part} después de particionar."
+}
+
+releer_tabla() {
+	local disco="$1" base
+	base=$(basename "${disco}")
+	if [[ -f "/sys/block/${base}/loop/backing_file" ]]; then
+		losetup -c "${disco}" 2>/dev/null || true
+	fi
+	# partprobe a veces borra los nodos en un sistema sin udev. partx los añade.
+	partx -u "${disco}" 2>/dev/null || partx -a "${disco}" 2>/dev/null || true
+	udevadm settle 2>/dev/null || true
+	sleep 0.2
+}
+
+tipo_particion() {
+	local part="$1" disco="" n="" tipo=""
+	disco=$(lsblk -no PKNAME "${part}" 2>/dev/null || true)
+	disco=${disco%%$'\n'*}
+	if [[ -n "${disco}" ]]; then
+		n=$(cat "/sys/class/block/$(basename "${part}")/partition" 2>/dev/null || true)
+		disco="/dev/${disco}"
+	elif [[ "${part}" =~ ^(/dev/.*[0-9])p([0-9]+)$ ]]; then
+		disco="${BASH_REMATCH[1]}"
+		n="${BASH_REMATCH[2]}"
+	elif [[ "${part}" =~ ^(/dev/[^0-9]+)([0-9]+)$ ]]; then
+		disco="${BASH_REMATCH[1]}"
+		n="${BASH_REMATCH[2]}"
+	fi
+	if [[ -n "${disco}" && -n "${n}" ]]; then
+		tipo=$(sfdisk --part-type "${disco}" "${n}" 2>/dev/null || true)
+		tipo=$(printf '%s' "${tipo}" | tr 'A-F' 'a-f')
+		tipo=${tipo//[[:space:]]/}
+		if [[ -n "${tipo}" ]]; then
+			printf '%s' "${tipo}"
+			return 0
+		fi
+	fi
+	tipo=$(lsblk -dno PARTTYPE "${part}" 2>/dev/null | tr 'A-F' 'a-f' || true)
+	printf '%s' "${tipo//[[:space:]]/}"
+}
+
+es_esp() {
+	local part="$1" ptype nombre
+	ptype=$(tipo_particion "${part}")
+	nombre=$(lsblk -dno PARTTYPENAME "${part}" 2>/dev/null || true)
+	case "${ptype}" in
+	"${ESP_GUID}" | ef | 0xef) return 0 ;;
+	esac
+	case "${nombre}" in
+	"EFI System" | "EFI system partition") return 0 ;;
+	esac
+	return 1
+}
+
+es_bios_grub() {
+	[[ "$(tipo_particion "$1")" == "${BIOS_GUID}" ]]
+}
+
+verificar_tipo() {
+	local part="$1" esperado="$2" nombre="$3" got i
+	for ((i = 0; i < 10; i++)); do
+		got=$(tipo_particion "${part}")
+		[[ "${got}" == "${esperado}" ]] && break
+		sleep 0.2
+	done
+	if [[ "${got}" != "${esperado}" ]]; then
+		die "la partición ${part} debería ser ${nombre} (${esperado}) pero el tipo es «${got:-vacío}». No sigo: GRUB fallaría con un error de GPT."
+	fi
+	echo "Tipo de ${part}: ${got} (${nombre})."
+}
+
+corregir_gpt() {
+	local disco="$1" label salida
+	label=$(blkid -o value -s PTTYPE "${disco}" 2>/dev/null || true)
+	[[ "${label}" == gpt ]] || return 0
+	if ! command -v sgdisk >/dev/null 2>&1; then
+		echo "AVISO: no está sgdisk. No se puede recolocar el encabezado GPT de respaldo."
+		return 0
+	fi
+	echo "==> Comprobando la tabla GPT de ${disco}"
+	set +e
+	salida=$(sgdisk -v "${disco}" 2>&1)
+	local rc=$?
+	set -e
+	printf '%s\n' "${salida}"
+	if [[ "${rc}" -eq 0 ]]; then
+		return 0
+	fi
+	echo "La tabla GPT no verifica. Se mueve el encabezado de respaldo al final del disco."
+	echo "Ese desajuste es el aviso «GPT: Use GNU Parted to correct GPT errors»."
+	sgdisk -e "${disco}" || die "no se pudo corregir la tabla GPT de ${disco}. GRUB no se instalará sobre una tabla dañada."
+	releer_tabla "${disco}"
+	set +e
+	salida=$(sgdisk -v "${disco}" 2>&1)
+	rc=$?
+	set -e
+	printf '%s\n' "${salida}"
+	if [[ "${rc}" -ne 0 ]]; then
+		die "la tabla GPT de ${disco} sigue siendo inválida después de corregirla. No se instala GRUB."
+	fi
+}
+
+pedir_usuario() {
+	if [[ "${PEKARCHOS_INSTALL_NONINTERACTIVE:-}" == 1 ]]; then
+		USUARIO="${PEKARCHOS_USER:-}"
+		NOMBRE="${PEKARCHOS_FULLNAME:-}"
+		PASS1="${PEKARCHOS_PASS:-}"
+		ROOTPASS="${PEKARCHOS_ROOT_PASS:-}"
+		if [[ -z "${USUARIO}" ]]; then
+			die "el nombre de usuario es obligatorio."
+		fi
+		if [[ -z "${PASS1}" ]]; then
+			die "la contraseña es obligatoria."
+		fi
+		if [[ "${USUARIO}" == root || "${USUARIO}" == live ]]; then
+			die "el nombre ${USUARIO} está reservado. Elige otro."
+		fi
+		if ! usuario_valido "${USUARIO}"; then
+			die "el nombre de usuario «${USUARIO}» no es válido. Usa minúsculas, números, - o _, y que empiece por una letra."
+		fi
+		if [[ -n "${ROOTPASS}" ]]; then
+			ROOT_BLOQUEADO=0
+			echo "root tendrá contraseña."
+		else
+			ROOT_BLOQUEADO=1
+			echo "root quedará bloqueado a propósito."
+		fi
+		return 0
+	fi
+
+	echo
+	echo "== Tu usuario =="
+	echo "La cuenta es obligatoria. Sin ella el escritorio no tiene a quién abrir la sesión"
+	echo "y SDDM se queda dando vueltas."
+	while true; do
+		leer_linea "Nombre de usuario (minúsculas, sin espacios): " USUARIO
+		if [[ -z "${USUARIO}" ]]; then
+			echo "El nombre de usuario es obligatorio."
+			continue
+		fi
+		if [[ "${USUARIO}" == root || "${USUARIO}" == live ]]; then
+			echo "Ese nombre está reservado. Elige otro."
+			continue
+		fi
+		if ! usuario_valido "${USUARIO}"; then
+			echo "Nombre no válido. Usa letras minúsculas, números, - o _, y que empiece por una letra."
+			continue
+		fi
+		break
+	done
+	leer_linea "Nombre completo (opcional): " NOMBRE
+	while true; do
+		leer_secreto "Contraseña: " PASS1
+		leer_secreto "Repite la contraseña: " PASS2
+		if [[ -z "${PASS1}" ]]; then
+			echo "La contraseña es obligatoria."
+			continue
+		fi
+		if [[ "${PASS1}" != "${PASS2}" ]]; then
+			echo "No coinciden. Otra vez."
+			continue
+		fi
+		break
+	done
+	unset PASS2
+	leer_linea "¿Poner contraseña a root? (s/N): " r
+	if [[ "${r}" =~ ^[sS]$ ]]; then
+		while true; do
+			leer_secreto "Contraseña de root: " ROOTPASS
+			leer_secreto "Repite: " r2
+			if [[ -z "${ROOTPASS}" ]]; then
+				echo "La contraseña de root es obligatoria si eliges ponerla."
+				continue
+			fi
+			if [[ "${ROOTPASS}" != "${r2}" ]]; then
+				echo "No coinciden. Otra vez."
+				continue
+			fi
+			break
+		done
+		unset r2
+		ROOT_BLOQUEADO=0
+	else
+		ROOTPASS=""
+		ROOT_BLOQUEADO=1
+		echo "root quedará bloqueado a propósito. Se entra con ${USUARIO} y sudo."
+	fi
+}
+
+escribir_teclado() {
+	local t="$1"
+	printf 'LANG=es_ES.UTF-8\nLC_TIME=es_ES.UTF-8\n' >"${t}/etc/locale.conf"
+	printf 'KEYMAP=es\nFONT=lat9w-16\n' >"${t}/etc/vconsole.conf"
+	install -d "${t}/etc/X11/xorg.conf.d"
+	cat >"${t}/etc/X11/xorg.conf.d/00-keyboard.conf" <<'KB'
+Section "InputClass"
+    Identifier "system-keyboard"
+    MatchIsKeyboard "on"
+    Option "XkbLayout" "es"
+    Option "XkbModel" "pc105"
+EndSection
+KB
+	install -d "${t}/etc/sddm.conf.d" "${t}/usr/local/bin" "${t}/etc/xdg" "${t}/etc/skel/.config"
+	cat >"${t}/usr/local/bin/pekarchos-sddm-xsetup" <<'XS'
+#!/bin/sh
+# Teclado español del greeter. SDDM no siempre aplica xorg.conf.d y se queda en US.
+if [ -x /usr/share/sddm/scripts/Xsetup ]; then
+	/usr/share/sddm/scripts/Xsetup
+fi
+if command -v setxkbmap >/dev/null 2>&1; then
+	setxkbmap -layout es -model pc105 || setxkbmap -layout es || true
+fi
+exit 0
+XS
+	chmod 755 "${t}/usr/local/bin/pekarchos-sddm-xsetup"
+	cat >"${t}/etc/sddm.conf.d/20-pekarchos-keyboard.conf" <<'SD'
+[General]
+DisplayServer=x11
+GreeterEnvironment=LANG=es_ES.UTF-8,LC_ALL=es_ES.UTF-8,XKB_DEFAULT_LAYOUT=es,XKB_DEFAULT_MODEL=pc105
+
+[X11]
+DisplayCommand=/usr/local/bin/pekarchos-sddm-xsetup
+SD
+	cat >"${t}/etc/xdg/kxkbrc" <<'KB'
+[Layout]
+LayoutList=es
+Model=pc105
+Use=true
+KB
+	cp "${t}/etc/xdg/kxkbrc" "${t}/etc/skel/.config/kxkbrc"
+}
+
+# --- Datos obligatorios antes de tocar el disco ---
+if [[ "${PEKARCHOS_INSTALL_NONINTERACTIVE:-}" == 1 ]]; then
+	if [[ -z "${PEKARCHOS_USER:-}" ]]; then
+		die "el nombre de usuario es obligatorio."
+	fi
+	if [[ -z "${PEKARCHOS_PASS:-}" ]]; then
+		die "la contraseña es obligatoria."
+	fi
+	if [[ "${PEKARCHOS_USER}" == root || "${PEKARCHOS_USER}" == live ]]; then
+		die "el nombre ${PEKARCHOS_USER} está reservado. Elige otro."
+	fi
+	if ! usuario_valido "${PEKARCHOS_USER}"; then
+		die "el nombre de usuario «${PEKARCHOS_USER}» no es válido. Usa minúsculas, números, - o _, y que empiece por una letra."
+	fi
+	if [[ -z "${PEKARCHOS_DISK:-}" ]]; then
+		die "en modo no interactivo hay que indicar el disco (PEKARCHOS_DISK)."
+	fi
+fi
+
 cat <<'TXT'
 ==============================================
             Instalar PekarchOS
@@ -72,11 +396,15 @@ Si tienes Windows y quieres conservarlo, elige la opción de
 instalar en una partición ya creada (hazle hueco antes desde
 Windows con «Administración de discos»).
 
-Puedes cancelar en cualquier momento con Ctrl+C antes de confirmar.
+El disco no se modifica hasta que escribas INSTALAR.
+Puedes cancelar con Ctrl+C antes de esa confirmación.
 TXT
 echo
 
-if [[ -d /sys/firmware/efi ]]; then
+if [[ "${PEKARCHOS_MODO:-}" == uefi || "${PEKARCHOS_MODO:-}" == bios ]]; then
+	MODO="${PEKARCHOS_MODO}"
+	echo "Arranque indicado: ${MODO}"
+elif [[ -d /sys/firmware/efi ]]; then
 	MODO=uefi
 	echo "Arranque detectado: UEFI"
 else
@@ -85,221 +413,370 @@ else
 fi
 echo
 
-# Disco donde está el propio live, para no ofrecerlo.
-live_disk=""
-if mountpoint -q "${BOOTMNT}"; then
+for cmd in sfdisk lsblk rsync mkfs.ext4 mkfs.fat arch-chroot genfstab grub-install blkid awk findmnt; do
+	command -v "${cmd}" >/dev/null 2>&1 || die "falta la orden ${cmd}. No se puede instalar."
+done
+if [[ "${MODO}" == uefi ]] && ! command -v mkfs.fat >/dev/null 2>&1; then
+	die "falta mkfs.fat. No se puede crear la partición EFI."
+fi
+
+if mountpoint -q "${BOOTMNT}" 2>/dev/null; then
 	live_src=$(findmnt -no SOURCE "${BOOTMNT}" || true)
 	if [[ -n "${live_src}" ]]; then
-		live_disk=$(lsblk -no PKNAME "${live_src}" 2>/dev/null | head -n1 || true)
-		[[ -z "${live_disk}" ]] && live_disk=$(basename "${live_src}")
+		LIVE_DISCO=$(lsblk -no PKNAME "${live_src}" 2>/dev/null || true)
+		LIVE_DISCO=${LIVE_DISCO%%$'\n'*}
+		[[ -z "${LIVE_DISCO}" && "${live_src}" == /dev/* ]] && LIVE_DISCO=$(basename "${live_src}")
 	fi
 fi
 
-echo "Discos disponibles:"
-mapfile -t discos < <(lsblk -dpno NAME,TYPE | awk '$2=="disk"{print $1}' | grep -v -e '/dev/loop' -e '/dev/zram' -e '/dev/sr' || true)
-validos=()
-for d in "${discos[@]}"; do
-	[[ -n "${live_disk}" && "$(basename "${d}")" == "${live_disk}" ]] && continue
-	validos+=("${d}")
-done
-[[ ${#validos[@]} -gt 0 ]] || die "no hay ningún disco donde instalar."
-i=1
-for d in "${validos[@]}"; do
-	printf '  %d) %s  %s  %s\n' "${i}" "${d}" "$(lsblk -dno SIZE "${d}")" "$(lsblk -dno MODEL "${d}" | sed 's/ *$//')"
-	i=$((i + 1))
-done
-echo
-pregunta "Número del disco:" n
-[[ "${n}" =~ ^[0-9]+$ && "${n}" -ge 1 && "${n}" -le ${#validos[@]} ]] || die "número de disco no válido."
-DISCO="${validos[$((n - 1))]}"
+if [[ -n "${PEKARCHOS_DISK:-}" ]]; then
+	DISCO="${PEKARCHOS_DISK}"
+	[[ -b "${DISCO}" ]] || die "PEKARCHOS_DISK=${DISCO} no es un disco."
+else
+	echo "Discos disponibles:"
+	mapfile -t discos < <(lsblk -dpno NAME,TYPE | awk '$2=="disk"{print $1}')
+	validos=()
+	for d in "${discos[@]}"; do
+		case "${d}" in
+		/dev/zram* | /dev/sr*) continue ;;
+		/dev/loop*)
+			[[ "${PEKARCHOS_ALLOW_LOOP:-}" == 1 ]] || continue
+			;;
+		esac
+		[[ -n "${LIVE_DISCO}" && "$(basename "${d}")" == "${LIVE_DISCO}" ]] && continue
+		validos+=("${d}")
+	done
+	[[ ${#validos[@]} -gt 0 ]] || die "no hay ningún disco donde instalar."
+	i=1
+	for d in "${validos[@]}"; do
+		printf '  %d) %s  %s  %s\n' "${i}" "${d}" "$(lsblk -dno SIZE "${d}")" "$(lsblk -dno MODEL "${d}" | sed 's/ *$//')"
+		i=$((i + 1))
+	done
+	echo
+	leer_linea "Número del disco: " n
+	[[ "${n}" =~ ^[0-9]+$ && "${n}" -ge 1 && "${n}" -le ${#validos[@]} ]] || die "número de disco no válido."
+	DISCO="${validos[$((n - 1))]}"
+fi
+
+if [[ -n "${LIVE_DISCO}" && "$(basename "${DISCO}")" == "${LIVE_DISCO}" ]]; then
+	die "${DISCO} es el disco del sistema en vivo. No se puede instalar encima."
+fi
+
 echo
 lsblk -o NAME,SIZE,FSTYPE,LABEL,PARTTYPENAME,MOUNTPOINTS "${DISCO}"
 echo
-cat <<'TXT'
+if [[ -n "${PEKARCHOS_OPTION:-}" ]]; then
+	opcion="${PEKARCHOS_OPTION}"
+else
+	cat <<'TXT'
 ¿Cómo quieres instalar?
   1) Borrar TODO el disco e instalar PekarchOS solo
   2) Instalar en una partición que ya existe (para convivir con Windows u otro sistema)
 TXT
-pregunta "Opción (1 o 2):" opcion
+	leer_linea "Opción (1 o 2): " opcion
+fi
 
-ESP=""
-ROOT=""
 case "${opcion}" in
 1)
-	echo
 	echo "Se borrará TODO lo que hay en ${DISCO} ($(lsblk -dno SIZE "${DISCO}"))."
-	confirmar_escribiendo BORRAR
-	swapoff -a || true
-	for p in $(lsblk -lnpo NAME "${DISCO}" | tail -n +2); do umount "${p}" 2>/dev/null || true; done
-	wipefs -af "${DISCO}"
 	if [[ "${MODO}" == uefi ]]; then
-		sfdisk --label gpt "${DISCO}" <<SF
-size=1GiB, type=U, name="EFI"
-type=L, name="PekarchOS"
-SF
+		echo "Tabla GPT: partición EFI de 1 GiB (FAT) y el resto ext4 para PekarchOS."
+	elif [[ "${PEKARCHOS_PARTITION_LABEL:-gpt}" == dos ]]; then
+		echo "Tabla MBR: una partición ext4. GRUB se instala en el sector de arranque."
 	else
-		sfdisk --label gpt "${DISCO}" <<SF
-size=1MiB, type=21686148-6F49-4E6F-A580-576F6E6F6F6C, name="BIOS"
-type=L, name="PekarchOS"
-SF
+		echo "Tabla GPT: 1 MiB de partición BIOS boot (sin formatear) y el resto ext4."
 	fi
-	partprobe "${DISCO}" 2>/dev/null || true
-	udevadm settle
-	sleep 1
-	if [[ "${MODO}" == uefi ]]; then
-		ESP=$(part_name "${DISCO}" 1)
-		mkfs.fat -F 32 -n EFI "${ESP}"
-	fi
-	ROOT=$(part_name "${DISCO}" 2)
 	;;
 2)
-	echo
 	echo "Particiones de ${DISCO}:"
 	mapfile -t parts < <(lsblk -lnpo NAME,TYPE "${DISCO}" | awk '$2=="part"{print $1}')
-	[[ ${#parts[@]} -gt 0 ]] || die "${DISCO} no tiene particiones. Créalas antes (por ejemplo con KDE Partition Manager) o usa la opción 1."
-	i=1
-	for p in "${parts[@]}"; do
-		printf '  %d) %-16s %8s  %-6s %s\n' "${i}" "${p}" "$(lsblk -dno SIZE "${p}")" "$(lsblk -dno FSTYPE "${p}")" "$(lsblk -dno PARTTYPENAME "${p}")"
-		i=$((i + 1))
-	done
-	echo
-	echo "Elige la partición para PekarchOS (se formateará; mínimo 30 GB recomendado)."
-	echo "NO elijas la de Windows (NTFS) ni la EFI."
-	pregunta "Número de la partición:" n
-	[[ "${n}" =~ ^[0-9]+$ && "${n}" -ge 1 && "${n}" -le ${#parts[@]} ]] || die "número no válido."
-	ROOT="${parts[$((n - 1))]}"
-	ptype=$(lsblk -dno PARTTYPE "${ROOT}" | tr 'A-F' 'a-f')
-	[[ "${ptype}" != "${ESP_TYPE}" ]] || die "esa es la partición EFI; no se puede usar como raíz."
-	fs=$(lsblk -dno FSTYPE "${ROOT}")
+	[[ ${#parts[@]} -gt 0 ]] || die "${DISCO} no tiene particiones. Créalas antes o usa la opción 1."
+	if [[ -n "${PEKARCHOS_ROOT_PART:-}" ]]; then
+		ROOT="${PEKARCHOS_ROOT_PART}"
+		encontrada=0
+		for p in "${parts[@]}"; do
+			[[ "${p}" == "${ROOT}" ]] && encontrada=1
+		done
+		[[ "${encontrada}" == 1 ]] || die "${ROOT} no es una partición de ${DISCO}."
+	else
+		i=1
+		for p in "${parts[@]}"; do
+			printf '  %d) %-16s %8s  %-6s %s\n' "${i}" "${p}" "$(lsblk -dno SIZE "${p}")" "$(lsblk -dno FSTYPE "${p}")" "$(lsblk -dno PARTTYPENAME "${p}")"
+			i=$((i + 1))
+		done
+		echo
+		echo "Elige la partición para PekarchOS (se formateará; mínimo 30 GB recomendado)."
+		echo "NO elijas la de Windows (NTFS) ni la EFI."
+		leer_linea "Número de la partición: " n
+		[[ "${n}" =~ ^[0-9]+$ && "${n}" -ge 1 && "${n}" -le ${#parts[@]} ]] || die "número no válido."
+		ROOT="${parts[$((n - 1))]}"
+	fi
+	if es_esp "${ROOT}" || es_bios_grub "${ROOT}"; then
+		die "${ROOT} es una partición de arranque (EFI o BIOS boot). No se puede usar como raíz."
+	fi
+	fs=$(lsblk -dno FSTYPE "${ROOT}" || true)
 	if [[ "${fs}" == ntfs || "${fs}" == BitLocker ]]; then
 		echo "¡OJO! ${ROOT} es ${fs}: parece de Windows y se perdería."
 	fi
 	if [[ "${MODO}" == uefi ]]; then
-		# Reutiliza la partición EFI que ya existe (la de Windows) SIN formatearla.
-		mapfile -t esps < <(lsblk -lnpo NAME,PARTTYPE "${DISCO}" | awk -v t="${ESP_TYPE}" 'tolower($2)==t{print $1}')
-		if [[ ${#esps[@]} -eq 0 ]]; then
-			mapfile -t esps < <(lsblk -lnpo NAME,PARTTYPE | awk -v t="${ESP_TYPE}" 'tolower($2)==t{print $1}')
-		fi
-		[[ ${#esps[@]} -gt 0 ]] || die "no hay partición EFI. Con arranque UEFI hace falta una (Windows siempre la tiene)."
-		if [[ ${#esps[@]} -eq 1 ]]; then
-			ESP="${esps[0]}"
+		if [[ -n "${PEKARCHOS_ESP:-}" ]]; then
+			ESP="${PEKARCHOS_ESP}"
+			es_esp "${ESP}" || die "${ESP} no es una partición EFI System."
 		else
-			echo "Hay varias particiones EFI:"
-			i=1
-			for p in "${esps[@]}"; do printf '  %d) %s %s\n' "${i}" "${p}" "$(lsblk -dno SIZE "${p}")"; i=$((i + 1)); done
-			pregunta "¿Cuál uso?" n
-			[[ "${n}" =~ ^[0-9]+$ && "${n}" -ge 1 && "${n}" -le ${#esps[@]} ]] || die "número no válido."
-			ESP="${esps[$((n - 1))]}"
+			esps=()
+			for p in "${parts[@]}"; do
+				if es_esp "${p}"; then
+					esps+=("${p}")
+				fi
+			done
+			if [[ ${#esps[@]} -eq 0 ]]; then
+				die "no hay partición EFI en ${DISCO}. Con arranque UEFI hace falta una partición FAT del tipo EFI System. Créala o usa la opción 1."
+			fi
+			if [[ ${#esps[@]} -eq 1 ]]; then
+				ESP="${esps[0]}"
+			else
+				echo "Hay varias particiones EFI:"
+				i=1
+				for p in "${esps[@]}"; do
+					printf '  %d) %s %s\n' "${i}" "${p}" "$(lsblk -dno SIZE "${p}")"
+					i=$((i + 1))
+				done
+				leer_linea "¿Cuál uso? " n
+				[[ "${n}" =~ ^[0-9]+$ && "${n}" -ge 1 && "${n}" -le ${#esps[@]} ]] || die "número no válido."
+				ESP="${esps[$((n - 1))]}"
+			fi
 		fi
-		echo "Se usará la partición EFI ${ESP} SIN formatearla (Windows sigue arrancando)."
+		[[ "${ESP}" != "${ROOT}" ]] || die "la partición EFI y la raíz no pueden ser la misma."
+		echo "Se usará la partición EFI ${ESP} SIN formatearla."
+	else
+		label=$(blkid -o value -s PTTYPE "${DISCO}" 2>/dev/null || true)
+	if [[ -z "${label}" ]]; then
+		if sfdisk -d "${DISCO}" 2>/dev/null | grep -q 'label: gpt'; then
+			label=gpt
+		elif sfdisk -d "${DISCO}" 2>/dev/null | grep -q 'label: dos'; then
+			label=dos
+		fi
 	fi
-	echo
+		if [[ "${label}" == gpt ]]; then
+			tiene_bios=0
+			for p in "${parts[@]}"; do
+				if es_bios_grub "${p}"; then
+					tiene_bios=1
+					echo "Partición BIOS boot: ${p}"
+				fi
+			done
+			if [[ "${tiene_bios}" != 1 ]]; then
+				die "el disco ${DISCO} es GPT y el equipo arranca en BIOS. GRUB necesita una partición BIOS boot sin formatear (tipo ${BIOS_GUID}, unos 1 MiB). Sin ella diría «this GPT partition label contains no BIOS Boot Partition» y abortaría. Créala o usa la opción 1."
+			fi
+		elif [[ "${label}" != dos ]]; then
+			die "la tabla de ${DISCO} es «${label:-desconocida}». Para BIOS hace falta GPT (con partición BIOS boot) o MBR."
+		else
+			echo "Disco MBR: GRUB se instalará en el sector de arranque, sin partición EFI."
+		fi
+	fi
 	echo "Se BORRARÁ todo el contenido de ${ROOT} ($(lsblk -dno SIZE "${ROOT}"))."
-	confirmar_escribiendo BORRAR
-	umount "${ROOT}" 2>/dev/null || true
 	;;
 *)
 	die "opción no válida."
 	;;
 esac
 
-echo
-echo "== Tu usuario =="
-while true; do
-	pregunta "Nombre de usuario (minúsculas, sin espacios):" USUARIO
-	[[ "${USUARIO}" =~ ^[a-z_][a-z0-9_-]{0,31}$ && "${USUARIO}" != root && "${USUARIO}" != live ]] && break
-	echo "Nombre no válido. Usa letras minúsculas, números, - o _."
-done
-pregunta "Nombre completo (opcional):" NOMBRE
-while true; do
-	read -r -s -p "Contraseña: " PASS1; echo
-	read -r -s -p "Repite la contraseña: " PASS2; echo
-	[[ -n "${PASS1}" && "${PASS1}" == "${PASS2}" ]] && break
-	echo "No coinciden o están vacías. Otra vez."
-done
-ROOTPASS=""
-pregunta "¿Poner contraseña a root? (s/N):" r
-if [[ "${r}" =~ ^[sS] ]]; then
-	while true; do
-		read -r -s -p "Contraseña de root: " ROOTPASS; echo
-		read -r -s -p "Repite: " r2; echo
-		[[ -n "${ROOTPASS}" && "${ROOTPASS}" == "${r2}" ]] && break
-		echo "No coinciden. Otra vez."
-	done
-fi
+pedir_usuario
 
 echo
 echo "Resumen:"
 echo "  Arranque:   ${MODO}"
 echo "  Disco:      ${DISCO}"
-echo "  Raíz ext4:  ${ROOT} (se formatea)"
-if [[ -n "${ESP}" ]]; then echo "  EFI:        ${ESP} (montada en /boot/efi, no se formatea en la opción 2)"; fi
-echo "  Usuario:    ${USUARIO} (administrador con sudo)"
+echo "  Raíz ext4:  ${ROOT:-(se creará)} (se formatea)"
+if [[ "${MODO}" == uefi ]]; then
+	echo "  EFI:        ${ESP:-(se creará, 1 GiB, FAT)} montada en /boot/efi"
+	echo "              El núcleo se queda en /boot, dentro de la raíz."
+elif [[ "${opcion}" == 1 && "${PEKARCHOS_PARTITION_LABEL:-gpt}" == dos ]]; then
+	echo "  Tabla:      MBR. GRUB i386-pc en el sector de arranque."
+else
+	echo "  Tabla:      ${opcion} — BIOS. En GPT hace falta la partición BIOS boot."
+fi
+echo "  Usuario:    ${USUARIO} (administrador, grupo wheel, sudo con contraseña)"
+if [[ "${ROOT_BLOQUEADO}" == 1 ]]; then
+	echo "  root:       bloqueado a propósito"
+else
+	echo "  root:       con contraseña"
+fi
+echo "  Teclado:    español (consola, X11, SDDM y Plasma)"
+echo "  Idioma:     es_ES.UTF-8"
 echo
+echo "Hasta aquí no se ha escrito nada en ${DISCO}."
+confirmar_escribiendo BORRAR
+echo
+echo "Última confirmación. A partir de aquí se formatea y se copia el sistema."
 confirmar_escribiendo INSTALAR
 
-trap 'limpiar_montajes; die "falló la orden en la línea ${LINENO}"' ERR
+trap 'limpiar_montajes; die "falló la orden en la línea ${LINENO}: ${BASH_COMMAND}"' ERR
+
+if [[ "${opcion}" == 1 ]]; then
+	echo "==> Particionando ${DISCO}"
+	swapoff -a || true
+	while read -r p _; do
+		[[ -n "${p}" && "${p}" != "${DISCO}" ]] || continue
+		umount "${p}" 2>/dev/null || true
+	done < <(lsblk -lnpo NAME "${DISCO}" 2>/dev/null || true)
+	wipefs -af "${DISCO}"
+	if command -v sgdisk >/dev/null 2>&1; then
+		sgdisk --zap-all "${DISCO}" >/dev/null 2>&1 || true
+	fi
+	if [[ "${MODO}" == uefi ]]; then
+		sfdisk --wipe always --label gpt "${DISCO}" <<'SF'
+size=1GiB, type=C12A7328-F81F-11D2-BA4B-00A0C93EC93B, name="EFI"
+type=0FC63DAF-8483-4772-8E79-3D69D8477DE4, name="PekarchOS"
+SF
+		releer_tabla "${DISCO}"
+		ESP=$(part_name "${DISCO}" 1)
+		ROOT=$(part_name "${DISCO}" 2)
+		esperar_nodo "${ESP}"
+		esperar_nodo "${ROOT}"
+		verificar_tipo "${ESP}" "${ESP_GUID}" "EFI System"
+		mkfs.fat -F 32 -n EFI "${ESP}"
+	elif [[ "${PEKARCHOS_PARTITION_LABEL:-gpt}" == dos ]]; then
+		sfdisk --wipe always --label dos "${DISCO}" <<'SF'
+start=2048, type=83, bootable, name="PekarchOS"
+SF
+		releer_tabla "${DISCO}"
+		ESP=""
+		ROOT=$(part_name "${DISCO}" 1)
+		esperar_nodo "${ROOT}"
+		label=$(blkid -o value -s PTTYPE "${DISCO}" || true)
+		if [[ -z "${label}" ]] && sfdisk -d "${DISCO}" 2>/dev/null | grep -q 'label: dos'; then
+			label=dos
+		fi
+		[[ "${label}" == dos ]] || die "se esperaba una tabla MBR y sfdisk dejó «${label:-vacío}»."
+	else
+		sfdisk --wipe always --label gpt "${DISCO}" <<'SF'
+size=1MiB, type=21686148-6449-6E6F-744E-656564454649, name="BIOSGRUB"
+type=0FC63DAF-8483-4772-8E79-3D69D8477DE4, name="PekarchOS"
+SF
+		releer_tabla "${DISCO}"
+		bios=$(part_name "${DISCO}" 1)
+		ESP=""
+		ROOT=$(part_name "${DISCO}" 2)
+		esperar_nodo "${bios}"
+		esperar_nodo "${ROOT}"
+		verificar_tipo "${bios}" "${BIOS_GUID}" "BIOS boot"
+		echo "La partición ${bios} no se formatea: GRUB incrusta ahí su imagen."
+	fi
+	sfdisk -d "${DISCO}" || true
+fi
+
+corregir_gpt "${DISCO}"
 
 echo "==> Formateando ${ROOT} como ext4"
+umount "${ROOT}" 2>/dev/null || true
 mkfs.ext4 -F -L PekarchOS "${ROOT}"
+udevadm settle 2>/dev/null || true
+blkid "${ROOT}" || true
+
 mkdir -p "${TARGET}"
 mount "${ROOT}" "${TARGET}"
+mkdir -p "${TARGET}"/{dev,proc,sys,run,tmp,mnt,boot,var/log}
 if [[ -n "${ESP}" ]]; then
-	mkdir -p "${TARGET}/boot/efi"
-	mount "${ESP}" "${TARGET}/boot/efi"
+	# El núcleo y el initramfs viven en la raíz (/boot). La ESP solo lleva
+	# el binario EFI, montada en /boot/efi. Si en el futuro /boot fuera la
+	# propia ESP (FAT), grub-install usaría --efi-directory=/boot.
+	EFI_DIR=/boot/efi
+	mkdir -p "${TARGET}${EFI_DIR}"
+	modprobe vfat 2>/dev/null || true
+	modprobe ext4 2>/dev/null || true
+	if ! mount "${ESP}" "${TARGET}${EFI_DIR}"; then
+		die "no se pudo montar la partición EFI ${ESP} en ${EFI_DIR}. Tiene que ser FAT (vfat). Si el núcleo no tiene ese sistema de archivos, GRUB no puede instalarse."
+	fi
+	mountpoint -q "${TARGET}${EFI_DIR}" || die "no se pudo montar ${ESP} en ${EFI_DIR}."
+	fstype=$(findmnt -no FSTYPE "${TARGET}${EFI_DIR}" || true)
+	[[ "${fstype}" == vfat ]] || die "la partición EFI ${ESP} no es FAT (es ${fstype:-desconocido}). No se formatea una EFI que ya existía."
+	echo "Partición EFI ${ESP} montada en ${EFI_DIR}."
+else
+	EFI_DIR=""
 fi
 
 echo "==> Copiando PekarchOS al disco (tarda unos minutos)"
-sfs=$(find "${BOOTMNT}" -name airootfs.sfs 2>/dev/null | head -n1 || true)
+sfs=$(find "${BOOTMNT}" -name airootfs.sfs 2>/dev/null | awk 'NR==1{print; exit}' || true)
 if mountpoint -q /run/archiso/airootfs; then
-	# La imagen squashfs original, ya montada por archiso: sin cambios del live.
-	rsync -aAXH --info=progress2 /run/archiso/airootfs/ "${TARGET}/"
-elif [[ -n "${sfs}" ]] && command -v unsquashfs >/dev/null; then
+	rsync -aAXH --info=progress2 \
+		--exclude='/dev/*' --exclude='/proc/*' --exclude='/sys/*' --exclude='/run/*' \
+		--exclude='/tmp/*' --exclude='/mnt/*' \
+		/run/archiso/airootfs/ "${TARGET}/"
+elif [[ -n "${sfs}" ]] && command -v unsquashfs >/dev/null 2>&1; then
 	unsquashfs -f -d "${TARGET}" "${sfs}"
 else
-	rsync -aAXH --info=progress2 \
+	rsync -aAXH --one-file-system --info=progress2 \
 		--exclude='/dev/*' --exclude='/proc/*' --exclude='/sys/*' --exclude='/run/*' \
 		--exclude='/tmp/*' --exclude='/mnt/*' --exclude='/media/*' --exclude='/lost+found' \
 		--exclude='/var/cache/pacman/pkg/*' --exclude='/var/log/*' \
 		/ "${TARGET}/"
 fi
-mkdir -p "${TARGET}"/{dev,proc,sys,run,tmp,mnt,boot}
+mkdir -p "${TARGET}"/{dev,proc,sys,run,tmp,mnt,boot,var/log}
 chmod 1777 "${TARGET}/tmp"
 
 echo "==> Núcleo"
-kver=$(ls "${TARGET}/usr/lib/modules" | head -n1)
-if [[ -f "${TARGET}/usr/lib/modules/${kver}/vmlinuz" ]]; then
+kver=""
+for d in "${TARGET}/usr/lib/modules"/*; do
+	[[ -d "${d}" ]] || continue
+	if [[ -f "${d}/vmlinuz" ]]; then
+		kver=$(basename "${d}")
+		break
+	fi
+done
+if [[ -n "${kver}" ]]; then
 	install -m644 "${TARGET}/usr/lib/modules/${kver}/vmlinuz" "${TARGET}/boot/vmlinuz-linux"
 else
-	kernel=$(find "${BOOTMNT}" -name vmlinuz-linux 2>/dev/null | head -n1 || true)
+	kernel=""
+	if [[ -d "${BOOTMNT}" ]]; then
+		kernel=$(find "${BOOTMNT}" -name vmlinuz-linux 2>/dev/null | awk 'NR==1{print; exit}' || true)
+	fi
+	if [[ -z "${kernel}" && -f /boot/vmlinuz-linux ]]; then
+		kernel=/boot/vmlinuz-linux
+	fi
 	[[ -n "${kernel}" ]] || die "no encuentro el núcleo vmlinuz-linux."
 	install -m644 "${kernel}" "${TARGET}/boot/vmlinuz-linux"
 fi
-for uc in "${BOOTMNT}"/*/boot/*-ucode.img "${BOOTMNT}"/boot/*-ucode.img; do
-	if [[ -f "${uc}" && ! -f "${TARGET}/boot/$(basename "${uc}")" ]]; then
-		install -m644 "${uc}" "${TARGET}/boot/"
-	fi
-done
+if [[ -d "${BOOTMNT}" ]]; then
+	while IFS= read -r uc; do
+		[[ -f "${uc}" ]] || continue
+		if [[ ! -f "${TARGET}/boot/$(basename "${uc}")" ]]; then
+			install -m644 "${uc}" "${TARGET}/boot/"
+		fi
+	done < <(find "${BOOTMNT}" -name '*-ucode.img' -type f 2>/dev/null || true)
+fi
 
 echo "==> Quitando lo que solo sirve en el live"
 T="${TARGET}"
 rm -f "${T}/etc/mkinitcpio.conf.d/archiso.conf"
+install -d "${T}/etc/mkinitcpio.d" "${T}/etc/mkinitcpio.conf.d"
 cat >"${T}/etc/mkinitcpio.d/linux.preset" <<'PRESET'
 # mkinitcpio preset file for the 'linux' package
+ALL_config="/etc/mkinitcpio.conf"
 ALL_kver="/boot/vmlinuz-linux"
 PRESETS=('default' 'fallback')
 default_image="/boot/initramfs-linux.img"
 fallback_image="/boot/initramfs-linux-fallback.img"
 fallback_options="-S autodetect"
 PRESET
-rm -f "${T}/etc/sddm.conf.d/10-autologin.conf" "${T}/etc/sudoers.d/live"
+printf '%s\n' 'MODULES+=(ext4 vfat)' >"${T}/etc/mkinitcpio.conf.d/pekarchos.conf"
+rm -f "${T}/etc/sudoers.d/live"
 rm -rf "${T}/etc/systemd/system/getty@tty1.service.d"
+shopt -s nullglob
+for f in "${T}/etc/sddm.conf" "${T}"/etc/sddm.conf.d/*; do
+	[[ -f "${f}" ]] || continue
+	if grep -q 'User=live' "${f}"; then
+		rm -f "${f}"
+	fi
+done
+shopt -u nullglob
 for u in pacman-init.service choose-mirror.service livecd-talk.service livecd-alsa-unmuter.service \
 	etc-pacman.d-gnupg.mount pekarchos-export-branding.service reflector.service; do
 	find "${T}/etc/systemd/system" -name "${u}" \( -type l -o -path "*.wants/*" \) -delete 2>/dev/null || true
 	case "${u}" in
 	pacman-init.service | choose-mirror.service | livecd-*.service | etc-pacman.d-gnupg.mount | pekarchos-export-branding.service)
-		rm -f "${T}/etc/systemd/system/${u}" ;;
+		rm -f "${T}/etc/systemd/system/${u}"
+		;;
 	esac
 done
 rm -f "${T}/etc/systemd/journald.conf.d/volatile-storage.conf" \
@@ -309,7 +786,7 @@ rm -f "${T}/etc/systemd/journald.conf.d/volatile-storage.conf" \
 	"${T}/usr/local/bin/choose-mirror" "${T}/usr/local/bin/Installation_guide" "${T}/usr/local/bin/livecd-sound" \
 	"${T}/usr/local/bin/pekarchos-export-branding" \
 	"${T}/usr/share/applications/pekarchos-install.desktop"
-rm -rf "${T}/usr/share/pekarchos/repo" "${T}/etc/pacman.d/gnupg"
+rm -rf "${T}/usr/share/pekarchos/repo" "${T}/etc/pacman.d/gnupg" "${T}/home/live"
 printf 'PekarchOS — basado en Arch Linux. Hecho por Pekapro.\n' >"${T}/etc/motd"
 printf 'PekarchOS \\r (\\l)\n\n' >"${T}/etc/issue"
 
@@ -317,20 +794,14 @@ echo "==> Configuración del sistema"
 : >"${T}/etc/machine-id"
 rm -f "${T}/var/lib/dbus/machine-id"
 printf 'pekarchos\n' >"${T}/etc/hostname"
-printf 'LANG=es_ES.UTF-8\nLC_TIME=es_ES.UTF-8\n' >"${T}/etc/locale.conf"
-printf 'KEYMAP=es\nFONT=lat9w-16\n' >"${T}/etc/vconsole.conf"
+cat >"${T}/etc/hosts" <<'EOF'
+127.0.0.1 localhost
+::1       localhost
+127.0.1.1 pekarchos.localdomain pekarchos
+EOF
 ln -sfn /usr/share/zoneinfo/Europe/Madrid "${T}/etc/localtime"
-install -d "${T}/etc/X11/xorg.conf.d"
-cat >"${T}/etc/X11/xorg.conf.d/00-keyboard.conf" <<'KB'
-Section "InputClass"
-    Identifier "system-keyboard"
-    MatchIsKeyboard "on"
-    Option "XkbLayout" "es"
-    Option "XkbModel" "pc105"
-EndSection
-KB
+escribir_teclado "${T}"
 
-# pacman: multilib sí, repositorio local del live no; mirrors del live si los hay.
 sed -i '/^\[pekarchos\]/,/^$/d' "${T}/etc/pacman.conf"
 if grep -q '^#\[multilib\]' "${T}/etc/pacman.conf"; then
 	sed -i '/^#\[multilib\]$/{s/^#//;n;s/^#Include/Include/}' "${T}/etc/pacman.conf"
@@ -343,94 +814,79 @@ elif ! grep -q '^Server' "${T}/etc/pacman.d/mirrorlist"; then
 	printf 'Server = https://geo.mirror.pkgbuild.com/$repo/os/$arch\n' >>"${T}/etc/pacman.d/mirrorlist"
 fi
 
+udevadm settle 2>/dev/null || true
+blkid "${ROOT}" >/dev/null || true
+if [[ -n "${ESP}" ]]; then
+	blkid "${ESP}" >/dev/null || true
+fi
 genfstab -U "${T}" >"${T}/etc/fstab"
+if ! grep -E -q '[[:space:]]/[[:space:]]' "${T}/etc/fstab"; then
+	echo "fstab generado:"
+	cat "${T}/etc/fstab" || true
+	die "fstab no tiene la raíz. No sigo."
+fi
+if [[ -n "${ESP}" ]] && ! grep -E -q "[[:space:]]${EFI_DIR}[[:space:]]" "${T}/etc/fstab"; then
+	echo "fstab generado:"
+	cat "${T}/etc/fstab" || true
+	die "fstab no monta la partición EFI en ${EFI_DIR}."
+fi
+echo "fstab:"
+cat "${T}/etc/fstab"
+
+helper=$(readlink -f "$(dirname "$(readlink -f "$0")")/../../lib/pekarchos/install-chroot.sh")
+[[ -f "${helper}" ]] || die "no encuentro el programa de instalación interno (${helper})."
+install -m755 "${helper}" "${T}/root/pekarchos-chroot.sh"
+umask 077
+trap - ERR
+{
+	printf 'USUARIO=%s\n' "$(printf '%s' "${USUARIO}" | base64 -w0)"
+	printf 'NOMBRE=%s\n' "$(printf '%s' "${NOMBRE}" | base64 -w0)"
+	printf 'PASS=%s\n' "$(printf '%s' "${PASS1}" | base64 -w0)"
+	printf 'ROOTPASS=%s\n' "$(printf '%s' "${ROOTPASS}" | base64 -w0)"
+	printf 'MODO=%s\n' "${MODO}"
+	printf 'DISCO=%s\n' "${DISCO}"
+	printf 'OPCION=%s\n' "${opcion}"
+	printf 'EFI_DIR=%s\n' "${EFI_DIR}"
+} >"${T}/root/.pekarchos-creds"
+chmod 600 "${T}/root/.pekarchos-creds"
+umask 022
+unset PASS1 ROOTPASS
+trap 'limpiar_montajes; die "falló la orden en la línea ${LINENO}: ${BASH_COMMAND}"' ERR
 
 echo "==> Dentro del sistema nuevo"
-cat >"${T}/root/pekarchos-chroot.sh" <<'CHROOT'
-#!/usr/bin/env bash
-set -euo pipefail
-USUARIO="$1"; NOMBRE="$2"; MODO="$3"; DISCO="$4"; OPCION="$5"
-
-sed -i 's/^#\s*\(es_ES.UTF-8 UTF-8\)/\1/; s/^#\s*\(en_US.UTF-8 UTF-8\)/\1/' /etc/locale.gen
-locale-gen
-systemd-machine-id-setup >/dev/null 2>&1 || true
-
-# Usuario live fuera.
-if id live >/dev/null 2>&1; then
-	userdel -r live 2>/dev/null || userdel live || true
+set +e
+arch-chroot "${T}" /root/pekarchos-chroot.sh
+rc=$?
+set -e
+rm -f "${T}/root/pekarchos-chroot.sh" "${T}/root/.pekarchos-creds"
+if [[ "${rc}" -ne 0 ]]; then
+	die "la instalación dentro del sistema nuevo falló (código ${rc}). El registro tiene el error de GRUB o de la cuenta. No se da por terminada."
 fi
-rm -rf /home/live
 
-grupos=()
-for g in wheel audio video optical storage network lp scanner users render input; do
-	getent group "$g" >/dev/null && grupos+=("$g")
-done
-useradd -m -G "$(IFS=,; echo "${grupos[*]}")" -s /bin/bash -c "${NOMBRE}" "${USUARIO}"
-for d in Escritorio Desktop; do
-	install -d -o "${USUARIO}" -g "${USUARIO}" "/home/${USUARIO}/${d}"
-	if [[ -f /usr/share/applications/pekarchos-welcome.desktop ]]; then
-		install -m755 -o "${USUARIO}" -g "${USUARIO}" /usr/share/applications/pekarchos-welcome.desktop "/home/${USUARIO}/${d}/"
-	fi
-done
-install -d -m 0750 /etc/sudoers.d
-printf '%%wheel ALL=(ALL:ALL) ALL\n' >/etc/sudoers.d/10-wheel
-chmod 0440 /etc/sudoers.d/10-wheel
-visudo -cf /etc/sudoers.d/10-wheel
-
-# Llavero de pacman (en el live vivía en memoria).
-pacman-key --init
-pacman-key --populate archlinux || true
-
-# initramfs normal (sin los hooks de archiso).
-mkinitcpio -P
-
-activar() { systemctl list-unit-files "$1" >/dev/null 2>&1 && systemctl enable "$1" || true; }
-activar NetworkManager.service
-activar bluetooth.service
-activar cups.socket
-activar power-profiles-daemon.service
-activar systemd-timesyncd.service
-systemctl enable sddm.service
-systemctl set-default graphical.target
-
-# GRUB con Windows detectado por os-prober.
-sed -i 's/^#\?GRUB_DISABLE_OS_PROBER=.*/GRUB_DISABLE_OS_PROBER=false/' /etc/default/grub
-grep -q '^GRUB_DISABLE_OS_PROBER=false' /etc/default/grub || echo 'GRUB_DISABLE_OS_PROBER=false' >>/etc/default/grub
-sed -i 's/^GRUB_DISTRIBUTOR=.*/GRUB_DISTRIBUTOR="PekarchOS"/' /etc/default/grub
-sed -i 's/^GRUB_TIMEOUT=.*/GRUB_TIMEOUT=5/' /etc/default/grub
-if [[ "${MODO}" == uefi ]]; then
-	grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=PekarchOS --recheck
-	# Copia de reserva en \EFI\BOOT solo con el disco entero: con Windows no se pisa.
-	if [[ "${OPCION}" == 1 ]]; then
-		grub-install --target=x86_64-efi --efi-directory=/boot/efi --removable --no-nvram || true
-	fi
-else
-	grub-install --target=i386-pc --recheck "${DISCO}"
+if ! arch-chroot "${T}" getent passwd "${USUARIO}" >/dev/null; then
+	die "al terminar, el usuario ${USUARIO} no existe en el disco."
 fi
-grub-mkconfig -o /boot/grub/grub.cfg
-CHROOT
-chmod 755 "${T}/root/pekarchos-chroot.sh"
-arch-chroot "${T}" /root/pekarchos-chroot.sh "${USUARIO}" "${NOMBRE}" "${MODO}" "${DISCO}" "${opcion}"
-rm -f "${T}/root/pekarchos-chroot.sh"
-
-printf '%s:%s\n' "${USUARIO}" "${PASS1}" | arch-chroot "${T}" chpasswd
-if [[ -n "${ROOTPASS}" ]]; then
-	printf 'root:%s\n' "${ROOTPASS}" | arch-chroot "${T}" chpasswd
-else
-	arch-chroot "${T}" passwd -l root >/dev/null
+if arch-chroot "${T}" id live >/dev/null 2>&1; then
+	die "al terminar, el usuario live sigue en el disco."
 fi
-unset PASS1 PASS2 ROOTPASS
 
-cp "${LOG}" "${T}/var/log/pekarchos-install.log" 2>/dev/null || true
+echo "INSTALACION_COMPLETA usuario=${USUARIO} modo=${MODO} disco=${DISCO}" >>"${LOG}"
+sync
+sleep 0.2
+cp "${LOG}" "${T}/var/log/pekarchos-install.log"
 sync
 limpiar_montajes
 trap - ERR
 
-cat <<'TXT'
+cat <<TXT
 
 ==============================================
    ¡PekarchOS instalado!
 ==============================================
-Quita el USB/ISO y reinicia. Entrarás con tu usuario y contraseña.
-Teclado: español. Si tienes Windows, aparecerá en el menú de GRUB.
+Quita el USB/ISO y reinicia.
+Entra con el usuario ${USUARIO} y la contraseña que has elegido.
+$(if [[ "${ROOT_BLOQUEADO}" == 1 ]]; then echo "root está bloqueado: administra con sudo."; else echo "root tiene contraseña."; fi)
+Teclado: español, también en la pantalla de SDDM.
+Arranque: ${MODO}. Si tienes Windows, aparecerá en el menú de GRUB.
+Registro: /var/log/pekarchos-install.log
 TXT

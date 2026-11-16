@@ -76,6 +76,7 @@ xdg-desktop-portal-kde
 xdg-user-dirs
 xdg-utils
 xorg-server
+xorg-setxkbmap
 xorg-xwayland
 qt6-svg
 

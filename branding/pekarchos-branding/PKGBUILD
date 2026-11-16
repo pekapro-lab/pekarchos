@@ -16,6 +16,9 @@ package() {
 	if compgen -G "${pkgdir}/usr/local/bin/*" >/dev/null; then
 		chmod 755 "${pkgdir}/usr/local/bin/"*
 	fi
+	if [[ -f "${pkgdir}/usr/lib/pekarchos/install-chroot.sh" ]]; then
+		chmod 755 "${pkgdir}/usr/lib/pekarchos/install-chroot.sh"
+	fi
 	if [[ -f "${pkgdir}/usr/share/pekarchos/postinstall.sh" ]]; then
 		chmod 755 "${pkgdir}/usr/share/pekarchos/postinstall.sh"
 	fi
