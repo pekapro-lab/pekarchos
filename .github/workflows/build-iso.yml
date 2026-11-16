@@ -71,6 +71,8 @@ jobs:
           df -h
 
       - name: Subir el artefacto
+        id: subir-iso
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: pekarchos-iso
@@ -81,6 +83,16 @@ jobs:
           if-no-files-found: error
           retention-days: 14
           compression-level: 0
+
+      - name: Confirmar que la ISO existe
+        run: |
+          set -euo pipefail
+          ls -lh out/*.iso out/SHA256SUMS
+          sha256sum -c out/SHA256SUMS
+          if [[ "${{ steps.subir-iso.outcome }}" != "success" ]]; then
+            echo "La ISO está construida, pero GitHub no ha guardado el artefacto."
+            echo "El fallo habitual es la cuota de almacenamiento de Actions. No hay pekarchos-iso en esta ejecución."
+          fi
 
       - name: Publicar en la release
         if: startsWith(github.ref, 'refs/tags/v')

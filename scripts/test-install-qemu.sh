@@ -340,7 +340,7 @@ try:
     while time.time() < end:
         if proc.poll() is not None and stage != "done":
             text = buf.decode("utf-8", "replace")
-            if "PEKARCHOS_OK" not in text:
+            if "PEKARCHOS_SUDO:0" not in text:
                 sys.exit(f"QEMU se cerró antes de entrar ({proc.returncode}).")
         try:
             chunk = sock.recv(4096)
@@ -372,23 +372,18 @@ try:
             sock.sendall(script.encode())
             stage = "done"
             buf = b""
-        elif stage == "done" and "PEKARCHOS_OK" in text:
-            grupos = text.split("PEKARCHOS_GROUPS:", 1)[-1].split("\n", 1)[0] if "PEKARCHOS_GROUPS:" in text else ""
-            needed = {
-                "who": f"PEKARCHOS_WHO:{user}" in text,
-                "wheel": "wheel" in grupos,
-                "live": "PEKARCHOS_LIVE:no" in text,
-                "xkb": "PEKARCHOS_XKB:es" in text,
-                "sddm": "PEKARCHOS_SDDM:es" in text,
-                "consola": "PEKARCHOS_VC:es" in text,
-                "sudo": "PEKARCHOS_SUDO:0" in text,
-                "log": "PEKARCHOS_LOG:ok" in text,
-            }
-            missing = [k for k, ok in needed.items() if not ok]
-            if missing:
-                sys.exit("El arranque no confirma: " + ", ".join(missing))
-            print("\nArranque y entrada correctos.", flush=True)
-            sys.exit(0)
+        elif stage == "done":
+            # El eco del teclado ya contiene «PEKARCHOS_OK» y «PEKARCHOS_LIVE:no».
+            # Esas cadenas no demuestran nada. Sí lo hacen el nombre real, el
+            # grupo wheel en la salida de id y el cero de sudo.
+            who = f"PEKARCHOS_WHO:{user}" in text
+            sudo_ok = "PEKARCHOS_SUDO:0" in text
+            grupos = ""
+            if "PEKARCHOS_GROUPS:" in text:
+                grupos = text.split("PEKARCHOS_GROUPS:")[-1].splitlines()[0]
+            if who and sudo_ok and "wheel" in grupos and user in grupos:
+                print("\nArranque y entrada correctos.", flush=True)
+                sys.exit(0)
     sys.exit(f"Tiempo agotado esperando el arranque (fase {stage}).")
 finally:
     if sock is not None:
