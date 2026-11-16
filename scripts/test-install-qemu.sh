@@ -324,15 +324,16 @@ try:
     stage = "login"
     step = 0
     # Órdenes cortas, de una en una. El resultado no aparece en el eco.
+    # El resultado lleva un prefijo que no está en la orden (allí sale %s o $?).
     steps = [
-        (b"id -un\n", ("\n" + user + "\n").encode()),
-        (b"id -nG\n", b"wheel"),
-        (b"id live >/dev/null 2>&1; echo LIVE:$?\n", b"LIVE:1"),
-        (b"grep -q es /etc/X11/xorg.conf.d/00-keyboard.conf; echo XKB:$?\n", b"XKB:0"),
-        (b"grep -q XKB_DEFAULT_LAYOUT=es /etc/sddm.conf.d/20-pekarchos-keyboard.conf; echo SDDM:$?\n", b"SDDM:0"),
-        (b"grep -q '^KEYMAP=es$' /etc/vconsole.conf; echo VC:$?\n", b"VC:0"),
-        (("printf '%s\\n' '" + password + "' | sudo -S -p '' true; echo SUDO:$?\n").encode(), b"SUDO:0"),
-        (b"test -f /var/log/pekarchos-install.log; echo LOG:$?\n", b"LOG:0"),
+        ("printf 'WHO:%s\\n' \"$(id -un)\"\n".encode(), b"WHO:" + user.encode()),
+        ("printf 'GROUPS:%s\\n' \"$(id -nG)\"\n".encode(), b"GROUPS:"),
+        (b"id live >/dev/null 2>&1; printf 'LIVE:%s\\n' $?\n", b"LIVE:1"),
+        (b"grep -q es /etc/X11/xorg.conf.d/00-keyboard.conf; printf 'XKB:%s\\n' $?\n", b"XKB:0"),
+        (b"grep -q XKB_DEFAULT_LAYOUT=es /etc/sddm.conf.d/20-pekarchos-keyboard.conf; printf 'SDDM:%s\\n' $?\n", b"SDDM:0"),
+        (b"grep -q '^KEYMAP=es$' /etc/vconsole.conf; printf 'VC:%s\\n' $?\n", b"VC:0"),
+        (("printf '%s\\n' '" + password + "' | sudo -S -p '' true; printf 'SUDO:%s\\n' $?\n").encode(), b"SUDO:0"),
+        (b"test -f /var/log/pekarchos-install.log; printf 'LOG:%s\\n' $?\n", b"LOG:0"),
     ]
     end = time.time() + 300
     while time.time() < end:
@@ -370,7 +371,9 @@ try:
             sock.sendall(steps[0][0])
             stage = "step"
             buf = b""
-        elif stage == "step" and steps[step][1] in buf:
+        elif stage == "step" and steps[step][1] in buf.replace(b"\r", b""):
+            if steps[step][1] == b"GROUPS:" and b"wheel" not in buf:
+                continue
             step += 1
             if step == len(steps):
                 print("\nArranque y entrada correctos.", flush=True)
