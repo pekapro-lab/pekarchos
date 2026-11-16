@@ -322,26 +322,22 @@ try:
     sock.settimeout(1)
     buf = b""
     stage = "login"
+    step = 0
+    # Órdenes cortas, de una en una. El resultado no aparece en el eco.
+    steps = [
+        (b"id -un\n", ("\n" + user + "\n").encode()),
+        (b"id -nG\n", b"wheel"),
+        (b"id live >/dev/null 2>&1; echo LIVE:$?\n", b"LIVE:1"),
+        (b"grep -q es /etc/X11/xorg.conf.d/00-keyboard.conf; echo XKB:$?\n", b"XKB:0"),
+        (b"grep -q XKB_DEFAULT_LAYOUT=es /etc/sddm.conf.d/20-pekarchos-keyboard.conf; echo SDDM:$?\n", b"SDDM:0"),
+        (b"grep -q '^KEYMAP=es$' /etc/vconsole.conf; echo VC:$?\n", b"VC:0"),
+        (("printf '%s\\n' '" + password + "' | sudo -S -p '' true; echo SUDO:$?\n").encode(), b"SUDO:0"),
+        (b"test -f /var/log/pekarchos-install.log; echo LOG:$?\n", b"LOG:0"),
+    ]
     end = time.time() + 300
-    script = (
-        "echo PEKARCHOS_WHO:$(id -un)\n"
-        "echo PEKARCHOS_GROUPS:$(id -nG)\n"
-        "awk -F: -v u='" + user + "' '$1==u{print \"PEKARCHOS_SHADOW:\" substr($2,1,1)}' /etc/shadow\n"
-        "awk -F: '$1==\"root\"{print \"PEKARCHOS_ROOT:\" substr($2,1,1)}' /etc/shadow\n"
-        "if id live >/dev/null 2>&1; then echo PEKARCHOS_LIVE:yes; else echo PEKARCHOS_LIVE:no; fi\n"
-        "grep -q 'XkbLayout\" \"es\"' /etc/X11/xorg.conf.d/00-keyboard.conf && echo PEKARCHOS_XKB:es || echo PEKARCHOS_XKB:no\n"
-        "grep -q XKB_DEFAULT_LAYOUT=es /etc/sddm.conf.d/20-pekarchos-keyboard.conf && echo PEKARCHOS_SDDM:es || echo PEKARCHOS_SDDM:no\n"
-        "grep -q '^KEYMAP=es$' /etc/vconsole.conf && echo PEKARCHOS_VC:es || echo PEKARCHOS_VC:no\n"
-        "printf '%s\\n' '" + password + "' | sudo -S -p '' true\n"
-        "echo PEKARCHOS_SUDO:$?\n"
-        "test -f /var/log/pekarchos-install.log && echo PEKARCHOS_LOG:ok || echo PEKARCHOS_LOG:no\n"
-        "echo PEKARCHOS_OK\n"
-    )
     while time.time() < end:
-        if proc.poll() is not None and stage != "done":
-            text = buf.decode("utf-8", "replace")
-            if "PEKARCHOS_SUDO:0" not in text:
-                sys.exit(f"QEMU se cerró antes de entrar ({proc.returncode}).")
+        if proc.poll() is not None and stage != "step":
+            sys.exit(f"QEMU se cerró antes de entrar ({proc.returncode}).")
         try:
             chunk = sock.recv(4096)
         except socket.timeout:
@@ -354,6 +350,8 @@ try:
             sys.stdout.buffer.write(chunk)
             sys.stdout.buffer.flush()
             buf += chunk
+            if b"[6n" in chunk:
+                sock.sendall(b"\x1b[24;80R")
         text = buf.decode("utf-8", "replace")
         low = text.lower()
         if "kernel panic" in low or "emergency mode" in low:
@@ -366,25 +364,20 @@ try:
             sock.sendall((password + "\n").encode())
             stage = "shell"
             buf = b""
-        elif stage == "shell" and ("login incorrect" in low or "incorrecto" in low or "incorrecta" in low):
+        elif stage == "shell" and ("incorrect" in low):
             sys.exit("La contraseña del usuario no ha valido en el arranque.")
         elif stage == "shell" and ("$ " in text or "# " in text or text.rstrip().endswith("$") or text.rstrip().endswith("#")):
-            sock.sendall(script.encode())
-            stage = "done"
+            sock.sendall(steps[0][0])
+            stage = "step"
             buf = b""
-        elif stage == "done":
-            # El eco del teclado ya contiene «PEKARCHOS_OK» y «PEKARCHOS_LIVE:no».
-            # Esas cadenas no demuestran nada. Sí lo hacen el nombre real, el
-            # grupo wheel en la salida de id y el cero de sudo.
-            who = f"PEKARCHOS_WHO:{user}" in text
-            sudo_ok = "PEKARCHOS_SUDO:0" in text
-            grupos = ""
-            if "PEKARCHOS_GROUPS:" in text:
-                grupos = text.split("PEKARCHOS_GROUPS:")[-1].splitlines()[0]
-            if who and sudo_ok and "wheel" in grupos and user in grupos:
+        elif stage == "step" and steps[step][1] in buf:
+            step += 1
+            if step == len(steps):
                 print("\nArranque y entrada correctos.", flush=True)
                 sys.exit(0)
-    sys.exit(f"Tiempo agotado esperando el arranque (fase {stage}).")
+            sock.sendall(steps[step][0])
+            buf = b""
+    sys.exit(f"Tiempo agotado esperando el arranque (fase {stage}, orden {step}).")
 finally:
     if sock is not None:
         sock.close()

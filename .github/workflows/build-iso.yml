@@ -87,10 +87,17 @@ jobs:
       - name: Confirmar que la ISO existe
         run: |
           set -euo pipefail
-          ls -lh out/*.iso out/SHA256SUMS
-          sha256sum -c out/SHA256SUMS
+          iso=$(echo out/*.iso)
+          test -f "${iso}"
+          test -f out/SHA256SUMS
+          # La suma se escribió dentro del contenedor, con la ruta /out/.
+          expected=$(awk '{print $1; exit}' out/SHA256SUMS)
+          actual=$(sha256sum "${iso}" | awk '{print $1}')
+          test "${expected}" = "${actual}"
+          ls -lh "${iso}" out/SHA256SUMS
+          echo "SHA256 ${actual}"
           if [[ "${{ steps.subir-iso.outcome }}" != "success" ]]; then
-            echo "La ISO está construida, pero GitHub no ha guardado el artefacto."
+            echo "La ISO está construida y la suma coincide, pero GitHub no ha guardado el artefacto."
             echo "El fallo habitual es la cuota de almacenamiento de Actions. No hay pekarchos-iso en esta ejecución."
           fi
 
