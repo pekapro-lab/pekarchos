@@ -6,6 +6,10 @@ on:
       tag:
         description: "Etiqueta de la release ya publicada en GitHub (por ejemplo v0.3.0)"
         required: true
+      solo_readme:
+        description: "Subir solo el README, sin la ISO"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -14,7 +18,10 @@ jobs:
   subir:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
       - name: Bajar las partes de la release y unirlas
+        if: ${{ !inputs.solo_readme }}
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.tag }}
@@ -37,13 +44,23 @@ jobs:
           SOURCEFORGE_SSH_KEY: ${{ secrets.SOURCEFORGE_SSH_KEY }}
           SOURCEFORGE_PROJECT: ${{ secrets.SOURCEFORGE_PROJECT }}
           TAG: ${{ inputs.tag }}
+          SOLO_README: ${{ inputs.solo_readme }}
         run: |
           set -euo pipefail
           install -d -m 0700 "${HOME}/.ssh"
           printf '%s\n' "${SOURCEFORGE_SSH_KEY}" > "${HOME}/.ssh/sf_key"
           chmod 600 "${HOME}/.ssh/sf_key"
           ssh-keyscan -H frs.sourceforge.net >> "${HOME}/.ssh/known_hosts"
+          mkdir -p out
+          files=()
+          if [[ "${SOLO_README}" != "true" ]]; then
+            files+=(out/*.iso out/SHA256SUMS)
+          fi
+          if [[ -f sourceforge/README.md ]]; then
+            cp sourceforge/README.md out/README.md
+            files+=(out/README.md)
+          fi
           rsync -av -e "ssh -i ${HOME}/.ssh/sf_key -o StrictHostKeyChecking=yes" \
-            out/*.iso out/SHA256SUMS \
+            "${files[@]}" \
             "${SOURCEFORGE_USER}@frs.sourceforge.net:/home/frs/project/${SOURCEFORGE_PROJECT}/${TAG}/"
           echo "Subida a SourceForge: ${TAG}"
