@@ -89,6 +89,8 @@ jobs:
             -e ISO_OUT=/out \
             archlinux:latest \
             bash /src/scripts/build-iso.sh
+          # Docker deja out/ como root; los pasos siguientes escriben en SHA256SUMS.
+          sudo chown -R "$(id -u):$(id -g)" out
           ls -lh out
           df -h
 
