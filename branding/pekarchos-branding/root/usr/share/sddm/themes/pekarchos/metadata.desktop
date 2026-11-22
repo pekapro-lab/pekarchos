@@ -2,10 +2,10 @@
 Name=PekarchOS
 Description=Tema neón de PekarchOS
 Author=Pekapro
-Copyright=(C) Pekapro, CC0-1.0
+Copyright=(C) Pekapro. El tema es CC0-1.0. El logotipo es CC BY-SA 4.0.
 License=CC0-1.0
 Type=sddm-theme
-Version=0.1.0
+Version=0.3.0
 Website=https://github.com/pekapro-lab/pekarchos
 MainScript=Main.qml
 ConfigFile=theme.conf

@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
-"""Genera los gráficos originales de PekarchOS (licencia CC0-1.0).
+"""Genera el fondo y la vista previa de SDDM (licencia CC0-1.0).
 
-No incrusta fuentes: el wordmark se dibuja con un alfabeto de píxeles propio.
+No incrusta fuentes: el wordmark del fondo se dibuja con un alfabeto de
+píxeles propio. El logotipo oficial no sale de aquí: lo genera
+tools/make_logo_icons.py a partir de branding/logo/logo-2-limpio.png
+(CC BY-SA 4.0) y este script no lo pisa.
+
 Ejecutar desde la raíz del repositorio:
 
     python3 tools/generate_assets.py
@@ -35,7 +39,6 @@ GLYPHS = {
 CYAN = (0, 240, 255)
 MAGENTA = (255, 43, 214)
 AMBER = (255, 176, 0)
-INK = (7, 7, 18)
 
 
 def lerp(a: int, b: int, t: float) -> int:
@@ -180,21 +183,6 @@ def make_wallpaper(width: int, height: int) -> Image.Image:
     return img
 
 
-def make_logo(size: int = 512) -> Image.Image:
-    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(img, "RGBA")
-    m = size // 16
-    draw.rounded_rectangle((m, m, size - m, size - m), radius=size // 8, fill=(*INK, 255))
-    draw.rounded_rectangle(
-        (m, m, size - m, size - m),
-        radius=size // 8,
-        outline=(*CYAN, 255),
-        width=max(4, size // 48),
-    )
-    draw_monogram(img, size // 4, size // 6, size // 28)
-    return img
-
-
 def main() -> None:
     for path in (WALL, THEME, KDE_WALL):
         path.mkdir(parents=True, exist_ok=True)
@@ -203,14 +191,8 @@ def main() -> None:
     wall.save(WALL / "wallpaper.png", optimize=True)
     wall.save(KDE_WALL / "1920x1080.png", optimize=True)
     wall.save(THEME / "background.png", optimize=True)
-    wall.resize((640, 360), Image.Resampling.LANCZOS).save(THEME / "preview.png", optimize=True)
-
-    splash = make_wallpaper(640, 480)
-    splash.save(WALL / "splash.png", optimize=True)
-
-    logo = make_logo()
-    logo.save(WALL / "logo.png", optimize=True)
-    print("assets written under", SHARE)
+    print("fondo escrito en", SHARE)
+    print("El logotipo, los iconos y el splash los escribe tools/make_logo_icons.py.")
 
 
 if __name__ == "__main__":

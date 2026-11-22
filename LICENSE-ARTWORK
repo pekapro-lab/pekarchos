@@ -1,0 +1,33 @@
+Logotipo de PekarchOS
+======================
+
+Autor: Peka / Pekapro
+Año: 2026
+
+El logotipo oficial (la P irisada dentro del anillo, con el texto
+«PekarchOS» y «Arch de Peka») se publica bajo la licencia
+
+    Creative Commons Atribución-CompartirIgual 4.0 Internacional
+    (CC BY-SA 4.0)
+
+Texto legal: https://creativecommons.org/licenses/by-sa/4.0/legalcode
+Resumen en español: https://creativecommons.org/licenses/by-sa/4.0/deed.es
+
+Hay que dar crédito, enlazar la licencia e indicar si se hicieron cambios.
+Si se mezcla o se transforma, el resultado se distribuye con la misma licencia.
+
+Archivo de origen: branding/logo/logo-2-limpio.png
+
+Derivados del mismo logotipo, con la misma licencia:
+
+- emblema e iconos hicolor (`pekarchos.png` / `pekarchos.svg`)
+- `logo-full.png` y `logo.svg`
+- splash de Syslinux
+- tema de Plymouth
+- tema de GRUB (fondo y piezas del menú)
+- avatar por defecto (`.face.icon`)
+
+El fondo de pantalla, los esquemas de color, el tema de SDDM (el código QML)
+y el perfil de Konsole siguen en CC0-1.0. No forman parte de esta licencia.
+El código (instalador, scripts y flujo de construcción) es GPL-3.0-or-later:
+ver LICENSE.

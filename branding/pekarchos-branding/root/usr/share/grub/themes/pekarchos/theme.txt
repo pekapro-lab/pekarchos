@@ -1,0 +1,53 @@
+# Tema de GRUB de PekarchOS. La fuente la carga grub.cfg (unicode.pf2).
+desktop-image: "background.png"
+desktop-color: "#081634"
+title-text: ""
+title-color: "#e8fbff"
+message-color: "#f0d0ff"
+terminal-font: "PekarchOS Regular 16"
+terminal-left: "0"
+terminal-top: "0"
+terminal-width: "100%"
+terminal-height: "100%"
+terminal-border: "0"
+
++ boot_menu {
+  left = 18%
+  top = 32%
+  width = 64%
+  height = 48%
+  item_font = "PekarchOS Regular 16"
+  item_color = "#e7f6ff"
+  selected_item_color = "#1a0a24"
+  item_height = 36
+  item_padding = 8
+  item_spacing = 14
+  icon_width = 0
+  icon_height = 0
+  item_icon_space = 0
+  selected_item_pixmap_style = "select_*.png"
+}
+
++ progress_bar {
+  id = "__timeout__"
+  left = 18%
+  top = 84%
+  height = 16
+  width = 64%
+  fg_color = "#ff2bd6"
+  bg_color = "#102040"
+  border_color = "#7ee7ff"
+  text_color = "#f4fbff"
+  font = "PekarchOS Regular 16"
+  text = "@TIMEOUT_NOTIFICATION_SHORT@"
+}
+
++ label {
+  left = 0
+  top = 91%
+  width = 100%
+  align = "center"
+  color = "#d7c4ff"
+  font = "PekarchOS Regular 16"
+  text = "PekarchOS - Arch de Peka"
+}

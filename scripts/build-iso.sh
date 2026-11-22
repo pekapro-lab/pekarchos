@@ -6,6 +6,17 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORK="${WORK:-/tmp/pekarchos-build}"
 OUT="${ISO_OUT:-${ROOT}/out}"
 
+if [[ ! -f "${ROOT}/VERSION" ]]; then
+	echo "Falta ${ROOT}/VERSION." >&2
+	exit 1
+fi
+PEKARCHOS_VERSION="$(tr -d '[:space:]' < "${ROOT}/VERSION")"
+if [[ -z "${PEKARCHOS_VERSION}" ]]; then
+	echo "VERSION está vacío." >&2
+	exit 1
+fi
+export PEKARCHOS_VERSION
+
 if [[ "$(id -u)" -ne 0 ]]; then
 	echo "build-iso.sh tiene que ejecutarse como root." >&2
 	exit 1
@@ -18,7 +29,10 @@ if [[ ! -x /usr/bin/mkarchiso ]]; then
 	pacman-key --populate archlinux
 	pacman -Sy --noconfirm archlinux-keyring
 	pacman -Su --noconfirm
-	pacman -S --noconfirm --needed archiso base-devel git sudo squashfs-tools reflector python
+	pacman -S --noconfirm --needed archiso base-devel git sudo squashfs-tools reflector python grub
+fi
+if [[ ! -f /usr/share/grub/unicode.pf2 ]]; then
+	pacman -S --noconfirm --needed grub
 fi
 if ! command -v python3 >/dev/null; then
 	pacman -S --noconfirm --needed python
@@ -60,6 +74,7 @@ mkdir -p "${src}/root/usr/share/icons"
 rm -rf "${src}/root/usr/share/icons/candy-icons"
 mv "${candy_tmp}" "${src}/root/usr/share/icons/candy-icons"
 
+cp "${ROOT}/VERSION" "${src}/VERSION"
 chown -R builder:builder "${src}"
 sudo -u builder bash -c "cd '${src}' && makepkg -s --noconfirm"
 cp "${src}"/pekarchos-branding-*.pkg.tar.zst "${WORK}/repo/"
@@ -112,7 +127,6 @@ try_aur() {
 		AUR_DROPPED+=("$1")
 	fi
 }
-try_aur google-chrome "$(tr -d '[:space:]' < "${ROOT}/branding/pins/google-chrome.commit")"
 try_aur dxvk-bin "$(tr -d '[:space:]' < "${ROOT}/branding/pins/dxvk-bin.commit")"
 try_aur playonlinux "$(tr -d '[:space:]' < "${ROOT}/branding/pins/playonlinux.commit")"
 try_aur "foobillard++" "$(tr -d '[:space:]' < "${ROOT}/branding/pins/foobillard++.commit")"
@@ -129,6 +143,11 @@ if [[ ! -d /usr/share/archiso/configs/releng ]]; then
 fi
 cp -a /usr/share/archiso/configs/releng/. "${WORK}/profile/"
 cp -a "${ROOT}/archiso/." "${WORK}/profile/"
+cp "${ROOT}/VERSION" "${WORK}/profile/VERSION"
+install -d "${WORK}/profile/grub/themes/pekarchos" "${WORK}/profile/grub/fonts"
+cp -a "${ROOT}/branding/pekarchos-branding/root/usr/share/grub/themes/pekarchos/." \
+	"${WORK}/profile/grub/themes/pekarchos/"
+cp /usr/share/grub/unicode.pf2 "${WORK}/profile/grub/fonts/unicode.pf2"
 if [[ ${#AUR_DROPPED[@]} -gt 0 ]]; then
 	for dropped in "${AUR_DROPPED[@]}"; do
 		grep -vxF "${dropped}" "${WORK}/profile/packages.x86_64" >"${WORK}/profile/packages.x86_64.tmp"
@@ -192,7 +211,11 @@ mkarchiso -v -r -w "${WORK}/work" -o "${OUT}" "${WORK}/profile"
 
 echo "==> Resultado"
 ls -lh "${OUT}"/*.iso
-sha256sum "${OUT}"/*.iso | tee "${OUT}/SHA256SUMS"
+# Nombres pelados: sha256sum -c falla si la suma lleva la ruta /out/.
+(
+	cd "${OUT}"
+	sha256sum ./*.iso | sed 's| \./| |' | tee SHA256SUMS
+)
 stat -c '%n %s' "${OUT}"/*.iso
 iso_size="$(stat -c%s "${OUT}"/*.iso)"
 # Tope de seguridad. El objetivo es quedarse cerca de 4 GiB; las releases de

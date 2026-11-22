@@ -17,14 +17,20 @@ El tema Plasma [EliverLara/Sweet-kde](https://github.com/EliverLara/Sweet-kde) e
 
 ## Esquema, fondo, SDDM y Konsole
 
-Obra de Pekapro para PekarchOS, CC0-1.0. Ver [CREDITS.md](CREDITS.md).
+El fondo, los esquemas de color, el código QML del tema de SDDM y el perfil de Konsole son obra de Pekapro, CC0-1.0. Ver [CREDITS.md](CREDITS.md).
+
+## Logotipo
+
+- Autor: Peka / Pekapro
+- Licencia: CC BY-SA 4.0. Ver [LICENSE-ARTWORK](LICENSE-ARTWORK)
+- Origen: `branding/logo/logo-2-limpio.png`
+- De ahí salen el emblema, los iconos `hicolor`, el avatar, el splash de Syslinux, Plymouth y el fondo del tema de GRUB (`tools/make_logo_icons.py`)
+- La fuente del menú de GRUB es DejaVu Sans, recortada a Latin y empaquetada como `pekarchos.pf2` (licencia Bitstream Vera). No es el logotipo.
+- Crédito: «Logotipo de PekarchOS, Peka / Pekapro, CC BY-SA 4.0»
 
 ## Google Chrome
 
-- Paquete AUR [google-chrome](https://aur.archlinux.org/packages/google-chrome), commit en `branding/pins/google-chrome.commit`
-- Licencia: propietaria (`custom:chrome`). No es software libre. Peka lo pidió como navegador por defecto.
-- El binario lo publica Google. La construcción descarga el `.deb` oficial y lo mete en el repo local `pekarchos` de la ISO.
-- Es el navegador por defecto (`google-chrome.desktop` en `mimeapps.list`). Firefox sigue instalado.
+Chrome no se redistribuye. Los términos del binario no permiten meterlo en la ISO. Firefox es el navegador por defecto. La bienvenida puede instalar el Flatpak `com.google.Chrome` desde Flathub: el paquete lo descarga el usuario desde Google y se actualiza por Flatpak. La licencia del binario sigue siendo la de Google.
 
 ## DXVK
 

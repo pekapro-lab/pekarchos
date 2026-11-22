@@ -39,6 +39,117 @@ fallo() {
 	exit 1
 }
 
+preparar_cuenta() {
+	local usuario="$1"
+	if [[ -x /usr/lib/pekarchos/poner-avatar.sh ]]; then
+		/usr/lib/pekarchos/poner-avatar.sh "${usuario}"
+	fi
+	if [[ -x /usr/lib/pekarchos/colocar-lanzadores.sh ]]; then
+		/usr/lib/pekarchos/colocar-lanzadores.sh "${usuario}"
+	else
+		install -d -o "${usuario}" -g "${usuario}" "/home/${usuario}/Escritorio"
+	fi
+}
+
+anadir_parametros_nucleo() {
+	local extra="$1"
+	local archivo=/etc/default/grub
+	local actual="" palabra
+	[[ -f "${archivo}" ]] || return 0
+	if grep -q '^GRUB_CMDLINE_LINUX_DEFAULT=' "${archivo}"; then
+		actual=$(sed -n 's/^GRUB_CMDLINE_LINUX_DEFAULT="//p' "${archivo}" | head -n 1)
+		actual=${actual%\"}
+		for palabra in ${extra}; do
+			case " ${actual} " in
+			*" ${palabra} "*) ;;
+			*) actual="${actual} ${palabra}" ;;
+			esac
+		done
+		actual=${actual# }
+		sed -i "s|^GRUB_CMDLINE_LINUX_DEFAULT=.*|GRUB_CMDLINE_LINUX_DEFAULT=\"${actual}\"|" "${archivo}"
+	else
+		printf 'GRUB_CMDLINE_LINUX_DEFAULT="%s"\n' "${extra}" >>"${archivo}"
+	fi
+}
+
+activar_tema_grub() {
+	local tema=/usr/share/grub/themes/pekarchos/theme.txt
+	[[ -f "${tema}" ]] || return 0
+	if grep -q '^GRUB_THEME=' /etc/default/grub; then
+		sed -i "s|^GRUB_THEME=.*|GRUB_THEME=\"${tema}\"|" /etc/default/grub
+	else
+		printf 'GRUB_THEME="%s"\n' "${tema}" >>/etc/default/grub
+	fi
+	if ! grep -q '^GRUB_GFXMODE=' /etc/default/grub; then
+		echo 'GRUB_GFXMODE=auto' >>/etc/default/grub
+	fi
+	if [[ -f /usr/share/grub/themes/pekarchos/pekarchos.pf2 ]] && ! grep -q '^GRUB_FONT=' /etc/default/grub; then
+		echo 'GRUB_FONT="/usr/share/grub/themes/pekarchos/pekarchos.pf2"' >>/etc/default/grub
+	fi
+	echo "Tema de GRUB: ${tema}"
+}
+
+enganchar_plymouth() {
+	[[ -f /usr/lib/initcpio/install/plymouth ]] || return 0
+	[[ -f /etc/mkinitcpio.conf ]] || return 0
+	if grep -q 'plymouth' /etc/mkinitcpio.conf; then
+		return 0
+	fi
+	if grep -q '^HOOKS=.*udev' /etc/mkinitcpio.conf; then
+		sed -i '/^HOOKS=/ s/udev/udev plymouth/' /etc/mkinitcpio.conf
+		echo "Hook plymouth añadido al initramfs."
+	else
+		echo "AVISO: no se encontró HOOKS con udev; Plymouth no entra en el initramfs."
+	fi
+	if [[ -x /usr/bin/plymouth ]]; then
+		anadir_parametros_nucleo "quiet splash"
+	fi
+}
+
+quitar_paquetes_live() {
+	local virt="" paquete
+	local -a quitar=()
+	virt=$(systemd-detect-virt 2>/dev/null || true)
+	for paquete in mkinitcpio-archiso edk2-shell memtest86+ memtest86+-efi syslinux; do
+		if pacman -Q "${paquete}" >/dev/null 2>&1; then
+			quitar+=("${paquete}")
+		fi
+	done
+	if [[ -z "${virt}" || "${virt}" == none ]]; then
+		for paquete in virtualbox-guest-utils qemu-guest-agent; do
+			if pacman -Q "${paquete}" >/dev/null 2>&1; then
+				quitar+=("${paquete}")
+			fi
+		done
+	else
+		echo "Máquina virtual (${virt}): se dejan las utilidades de invitado."
+	fi
+	if ((${#quitar[@]} == 0)); then
+		return 0
+	fi
+	echo "Quitando paquetes que solo sirven en el live: ${quitar[*]}"
+	for paquete in "${quitar[@]}"; do
+		if ! pacman -R --noconfirm "${paquete}"; then
+			echo "AVISO: no se pudo quitar ${paquete}. El sistema sigue."
+		fi
+	done
+}
+
+instalar_firmware() {
+	if ! command -v ip >/dev/null 2>&1; then
+		echo "Sin la orden ip: no se comprueba la red. Se queda el firmware de la ISO."
+		return 0
+	fi
+	if ! ip route show default 2>/dev/null | grep -q .; then
+		echo "Sin red: el disco se queda con el firmware de la ISO (AMD, NVIDIA, Intel, Realtek y Broadcom)."
+		return 0
+	fi
+	echo "Hay red: instalando el metapaquete linux-firmware."
+	if ! timeout 180 pacman -S --needed --noconfirm linux-firmware; then
+		echo "AVISO: no se pudo instalar linux-firmware. El firmware de GPU de la ISO se queda."
+	fi
+}
+
 dec() {
 	if [[ -z "${1:-}" ]]; then
 		printf ''
@@ -124,13 +235,7 @@ Model=pc105
 Use=true
 KB
 chown "${USUARIO}:${USUARIO}" "/home/${USUARIO}/.config/kxkbrc"
-for d in Escritorio Desktop; do
-	install -d -o "${USUARIO}" -g "${USUARIO}" "/home/${USUARIO}/${d}"
-	if [[ -f /usr/share/applications/pekarchos-welcome.desktop ]]; then
-		install -m644 -o "${USUARIO}" -g "${USUARIO}" \
-			/usr/share/applications/pekarchos-welcome.desktop "/home/${USUARIO}/${d}/"
-	fi
-done
+preparar_cuenta "${USUARIO}"
 
 printf '%s:%s\n' "${USUARIO}" "${PASS}" | chpasswd
 
@@ -256,7 +361,12 @@ echo "==> Llavero de pacman"
 pacman-key --init
 pacman-key --populate archlinux || true
 
+echo "==> Paquetes del live y firmware"
+quitar_paquetes_live
+instalar_firmware
+
 echo "==> initramfs"
+enganchar_plymouth
 install -d /etc/mkinitcpio.conf.d
 printf '%s\n' 'MODULES+=(ext4 vfat)' >/etc/mkinitcpio.conf.d/pekarchos.conf
 if ! mkinitcpio -P; then
@@ -303,6 +413,7 @@ if grep -q '^GRUB_TIMEOUT=' /etc/default/grub; then
 else
 	echo 'GRUB_TIMEOUT=5' >>/etc/default/grub
 fi
+activar_tema_grub
 echo "Disco ${DISCO}:"
 lsblk -o NAME,SIZE,FSTYPE,PARTTYPENAME,PARTTYPE,MOUNTPOINTS "${DISCO}" || true
 echo "Tabla:"

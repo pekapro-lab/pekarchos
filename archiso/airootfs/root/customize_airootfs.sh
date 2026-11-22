@@ -124,13 +124,16 @@ printf 'live ALL=(ALL) NOPASSWD: ALL\n' >/etc/sudoers.d/live
 chmod 0440 /etc/sudoers.d/live
 visudo -cf /etc/sudoers.d/live
 
-for folder in Desktop Escritorio; do
-	install -d -o live -g live "/home/live/${folder}"
-	install -m 0644 -o live -g live /usr/share/pekarchos/LEEME.txt "/home/live/${folder}/LEEME.txt"
-	install -m 0644 -o live -g live /usr/share/applications/pekarchos-install.desktop "/home/live/${folder}/pekarchos-install.desktop"
-	install -m 0644 -o live -g live /usr/share/applications/pekarchos-welcome.desktop "/home/live/${folder}/pekarchos-welcome.desktop"
-done
 chown -R live:live /home/live
+if [[ -x /usr/lib/pekarchos/colocar-lanzadores.sh ]]; then
+	/usr/lib/pekarchos/colocar-lanzadores.sh live --live
+else
+	echo "No está colocar-lanzadores.sh" >&2
+	exit 1
+fi
+if [[ -x /usr/lib/pekarchos/poner-avatar.sh ]]; then
+	/usr/lib/pekarchos/poner-avatar.sh live
+fi
 
 if command -v flatpak >/dev/null 2>&1; then
 	flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo \
@@ -138,9 +141,6 @@ if command -v flatpak >/dev/null 2>&1; then
 fi
 
 browser=firefox.desktop
-if [[ -f /usr/share/applications/google-chrome.desktop ]]; then
-	browser=google-chrome.desktop
-fi
 cat >/etc/xdg/mimeapps.list <<EOF
 [Default Applications]
 text/html=${browser}

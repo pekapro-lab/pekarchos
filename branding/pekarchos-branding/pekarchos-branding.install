@@ -24,15 +24,23 @@ EOF
 	fi
 
 	# archinstall crea al usuario antes de instalar este paquete.
+	# No pisa archivos que el usuario ya tenga. Copia lo que falte del esqueleto.
 	if [ -d /etc/skel ] && [ -d /home ]; then
 		for home in /home/*; do
 			[ -d "$home" ] || continue
 			user=$(basename "$home")
 			if id "$user" >/dev/null 2>&1; then
-				cp -a /etc/skel/. "$home/"
+				cp -a --update=none /etc/skel/. "$home/"
 				chown -R "$user:$user" "$home"
 			fi
 		done
+	fi
+
+	if command -v plymouth-set-default-theme >/dev/null 2>&1; then
+		plymouth-set-default-theme -R pekarchos || true
+	fi
+	if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+		gtk-update-icon-cache -qf /usr/share/icons/hicolor || true
 	fi
 }
 

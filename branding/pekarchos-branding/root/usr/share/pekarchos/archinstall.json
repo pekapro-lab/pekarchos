@@ -128,7 +128,14 @@
     "lutris",
     "winetricks",
     "gamemode",
-    "mangohud"
+    "mangohud",
+    "kinfocenter",
+    "vulkan-tools",
+    "wayland-utils",
+    "clinfo",
+    "aha",
+    "linux-firmware",
+    "plymouth"
   ],
   "services": [],
   "custom_commands": [

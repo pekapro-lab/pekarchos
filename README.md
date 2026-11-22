@@ -1,17 +1,30 @@
 # PekarchOS
 
-PekarchOS es un sistema en vivo basado en Arch Linux, hecho para Pekapro. Arranca en KDE Plasma, en español, con el teclado de España y la zona horaria de Madrid. El repositorio es **privado** y tiene que seguir siéndolo: la ISO no se publica en ningún sitio público.
+PekarchOS es un sistema en vivo basado en Arch Linux, hecho por Pekapro. Arranca en KDE Plasma 6 (Wayland), en español, con el teclado de España y la zona horaria de Madrid. El nombre en `/etc/os-release` es PekarchOS y el hostname del medio en vivo es `pekarchos`.
 
-La imagen se construye con [archiso](https://gitlab.archlinux.org/archlinux/archiso), a partir del perfil oficial `releng`. El nombre en `/etc/os-release` es PekarchOS y el hostname del medio en vivo es `pekarchos`.
+PekarchOS no está afiliado a Arch Linux. No usa el logotipo de Arch. «Arch de Peka» es el lema del logotipo de Pekapro.
+
+La versión de esta rama es la **0.3.0**. Sale del archivo [`VERSION`](VERSION) y de ahí pasan a `os-release`, el paquete de marca, la bienvenida y el nombre de la ISO: `pekarchos-0.3.0-x86_64.iso`.
+
+## Requisitos
+
+- Procesador de 64 bits
+- 4 GiB de RAM (con 8 GiB va más holgado)
+- 20 GiB libres en el disco donde se instale
+- UEFI o BIOS
+- Un USB de 8 GiB o más, si se graba
 
 ## Qué trae el escritorio
 
 Conjunto corto de Plasma (`plasma-desktop`), no `plasma-meta`:
 
-- Sesión Plasma (Wayland). En los repos actuales de Arch ya no está el paquete `plasma-x11-session`.
-- SDDM con el tema PekarchOS y entrada automática del usuario en vivo.
-- Fondo, logotipo, esquema PekarchOS Neon, acento magenta, perfil de Konsole y tema de SDDM (CC0). Iconos [Candy](THIRD-PARTY.md) (GPL-3.0) con respaldo Breeze. Cursor y estilo de widgets: Breeze.
-- fastfetch con el logo de PekarchOS al abrir una terminal.
+- Sesión Plasma en Wayland. En los repos actuales de Arch no está `plasma-x11-session`.
+- SDDM con el tema PekarchOS. En el live, el usuario entra solo.
+- Fondo y esquemas PekarchOS Neon (CC0), iconos [Candy](THIRD-PARTY.md) (GPL-3.0) con respaldo Breeze, cursor y widgets Breeze, decoración Plastik.
+- Logotipo de Peka / Pekapro (CC BY-SA 4.0): iconos, bienvenida, avatar, Acerca de, Plymouth y GRUB. Ver [LICENSE-ARTWORK](LICENSE-ARTWORK).
+- Animación de arranque Plymouth y tema de GRUB, en la ISO y en el sistema instalado.
+- Centro de información (`kinfocenter`), con `vulkan-tools`, `wayland-utils`, `clinfo` y `aha` para que esas páginas no salgan vacías.
+- fastfetch al abrir una terminal.
 
 Usuario del medio en vivo:
 
@@ -23,103 +36,99 @@ Usuario del medio en vivo:
 
 La cuenta `root` está bloqueada. SSH no se arranca solo.
 
-## Programas incluidos
+## Programas
 
-- Firefox (con el paquete de idioma `firefox-i18n-es-es`)
-- LibreOffice Fresh y el paquete de idioma español, más guiones y sinónimos (`hyphen-es`, `mythes-es`)
-- VLC, GIMP, Kate, Dolphin, Konsole, Ark, Spectacle
-- Navegador por defecto: Google Chrome (licencia propietaria, empaquetado en la ISO). Firefox, Falkon, wget y KTorrent también van instalados.
-- Vídeo: OBS Studio, Kdenlive, VLC, Shotcut, guvcview y HandBrake.
-- Gráficos: Blender, Krita, GIMP, Spectacle y Vokoscreen.
+- Navegador por defecto: **Firefox** (`firefox-i18n-es-es`). También van Falkon y KTorrent.
+- Google Chrome **no** se redistribuye. La bienvenida puede instalarlo desde Flathub (`com.google.Chrome`), que lo descarga de Google y lo actualiza.
+- LibreOffice Fresh en español, VLC, GIMP, Kate, Dolphin, Konsole, Ark y Spectacle.
+- Vídeo: OBS Studio, Kdenlive, Shotcut, guvcview y HandBrake.
+- Gráficos: Blender, Krita y Vokoscreen.
 - Audio: Audacity, Hydrogen, Yoshimi y Elisa.
-- Juegos: Wine Staging, Lutris, PlayOnLinux, Steam (multilib), FooBillard++, DXVK, Winetricks, GameMode, MangoHud y Vulkan de AMD/Intel en 64 y 32 bits.
-- `git` y el grupo `base-devel`
-- Flatpak, Discover y PackageKit. En la construcción se intenta añadir el remoto de Flathub
-- NetworkManager, PipeWire (Pulse, ALSA y JACK) con WirePlumber
-- Bluetooth (BlueZ y Bluedevil) y impresión (CUPS, `cups-pdf`, Print Manager)
-- Firmware habitual en el live (`linux-firmware` de Intel, AMD/AMDGPU, Radeon, Realtek y Broadcom, más `sof-firmware`) y microcódigos Intel y AMD. El instalador mete el metapaquete `linux-firmware` completo en el disco
-- Mesa, Vulkan para AMD, Intel y Nouveau, y utilidades de invitado para VirtualBox y QEMU
+- Juegos: Wine Staging, Lutris, PlayOnLinux, Steam (multilib), FooBillard++, DXVK, Winetricks, GameMode y MangoHud.
+- Flatpak, Discover y Flathub (si la construcción pudo añadir el remoto).
+- NetworkManager, PipeWire, Bluetooth e impresión.
 
-Chrome, DXVK, PlayOnLinux y FooBillard++ se construyen en la ISO desde el AUR, con el commit fijado en `branding/pins/`. No hay helper tipo `yay` instalado. El detalle de licencias está en [THIRD-PARTY.md](THIRD-PARTY.md).
+DXVK, PlayOnLinux y FooBillard++ se construyen desde el AUR con el commit fijado en `branding/pins/`. No hay un helper tipo `yay`. Si uno de esos paquetes no compila, la ISO sale igual y el fallo queda en `AUR-OMITIDOS.txt`. Las licencias están en [THIRD-PARTY.md](THIRD-PARTY.md).
 
-Las traducciones de KDE van dentro de cada paquete: en los repos oficiales ya no existe `kde-l10n-es`.
+## Firmware
+
+La ISO, y por tanto una instalación sin red, lleva el firmware de GPU e inalámbrico habitual:
+
+- `linux-firmware-amd`, `linux-firmware-amdgpu`, `linux-firmware-radeon`
+- `linux-firmware-intel`
+- `linux-firmware-nvidia` (hace falta para nouveau/NVK en GTX 16 y RTX)
+- `linux-firmware-realtek`, `linux-firmware-broadcom` y `sof-firmware`
+- microcódigos Intel y AMD
+
+No es el metapaquete `linux-firmware` entero: faltan, entre otros, Atheros y MediaTek. Si al instalar hay red, el instalador ejecuta `pacman -S linux-firmware` y completa el resto. Si no hay red, se puede instalar después. La alternativa `pekarchos-install --archinstall` sí pide el metapaquete, porque descarga los paquetes.
 
 ## Instalador
 
-El icono **Instalar PekarchOS** abre `pekarchos-install`, un instalador de terminal en español que **copia el live tal cual al disco** (como hacen EndeavourOS o Manjaro). Lo instalado queda igual que el live: tema neón (Neon Magenta), iconos Candy, bienvenida y todos los programas. No necesita internet.
-
-Pasos que ve el usuario:
+El icono **Instalar PekarchOS** abre `pekarchos-install`. Copia el live al disco (como EndeavourOS o Manjaro), sin internet. Lo instalado queda con el mismo tema, los mismos programas y el mismo firmware de la ISO.
 
 1. Aviso y detección de UEFI o BIOS.
-2. Elegir el disco (no se ofrece el propio USB del live).
-3. Elegir: **1)** borrar el disco entero o **2)** instalar en una partición ya creada, para convivir con Windows. En UEFI se reutiliza la partición EFI existente **sin formatearla**. En BIOS, un disco GPT tiene que tener partición BIOS boot; un disco MBR no.
-4. Usuario y contraseña, las dos obligatorias. Si se dejan vacías o no coinciden, vuelve a preguntar. root se bloquea salvo que se le ponga contraseña.
+2. Elegir el disco (no se ofrece el USB del live).
+3. Borrar el disco entero, o usar una partición ya creada para convivir con Windows. En UEFI se reutiliza la partición EFI **sin formatearla**.
+4. Usuario y contraseña, los dos obligatorios. root se bloquea salvo que se le ponga contraseña.
 5. Resumen. El disco sigue intacto.
 6. Escribir `BORRAR` y después `INSTALAR`.
 
-Al borrar el disco entero: UEFI crea una GPT con EFI de 1 GiB (FAT, montada en `/boot/efi`; el núcleo sigue en `/boot`) y el resto ext4. BIOS crea una GPT con 1 MiB de partición BIOS boot (tipo `21686148-6449-6E6F-744E-656564454649`, sin formatear) y el resto ext4. Con `PEKARCHOS_PARTITION_LABEL=dos` el borrado BIOS usa MBR y GRUB en el sector de arranque.
+Luego quita lo que solo sirve en el live (usuario `live`, autologin, sudo sin contraseña, servicios de archiso y, en un PC real, las utilidades de invitado de VirtualBox y QEMU). Crea la cuenta, comprueba que la contraseña autentica y que está en `wheel`, instala GRUB y genera el initramfs. El teclado queda en español. Idioma `es_ES.UTF-8`, zona `Europe/Madrid`, hostname `pekarchos`. GRUB lleva os-prober para que aparezca Windows.
 
-Después copia la imagen squashfs original (`/run/archiso/airootfs`), quita lo que solo sirve en el live (usuario `live`, autologin, sudo sin contraseña, servicios de archiso, repositorio local), crea la cuenta, comprueba que la contraseña autentica y que está en `wheel` con sudo, y solo entonces instala GRUB. En UEFI prueba `grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=PekarchOS` y, si la NVRAM falla o el disco es solo nuestro, escribe también la copia `--removable`. En BIOS usa `grub-install --target=i386-pc`. Luego `grub-mkconfig`. El teclado queda en español en la consola, en X11, en SDDM y en Plasma. Idioma `es_ES.UTF-8`, zona `Europe/Madrid`, hostname `pekarchos`, multilib activado y GRUB con os-prober para que aparezca Windows.
+Si algo falla, el mensaje es en español y el registro queda en `/var/log/pekarchos-install.log`.
 
-Si algo falla, el mensaje es en español y el registro queda en `/var/log/pekarchos-install.log` (también copiado al disco de destino). No dice que la instalación ha terminado.
+`sudo pekarchos-install --archinstall` abre archinstall con el perfil de PekarchOS. **Necesita red**: no copia este live, descarga los paquetes.
 
-Alternativa: `sudo pekarchos-install --archinstall` instala un Arch limpio con archinstall (necesita red).
+## Menú de arranque de la ISO
+
+BIOS usa Syslinux. UEFI usa GRUB, con el tema de PekarchOS. En los dos hay, además de la entrada normal:
+
+- **Gráficos seguros**: `nomodeset` y sin Plymouth. Para una pantalla negra o para probar si el cuelgue viene de la gráfica. En el menú de BIOS el rótulo va sin tilde (`graficos seguros`) porque la fuente de Syslinux no es Unicode. En GRUB se lee «gráficos seguros».
+- **Compatibilidad Ryzen/USB**: `processor.max_cstate=5 usbcore.autosuspend=-1 pcie_aspm=off`. Pensada para cuelgues de ratón y teclado en Ryzen de primera generación (se vio en una MSI MS-7A33 con un Ryzen 7 1700X). Si sigue, prueba un puerto USB 2.0 trasero.
+
+Memtest86+ sigue en el menú.
 
 ## Bienvenida
 
-En el sistema instalado, al entrar la primera vez se abre **Bienvenida PekarchOS** (si dejas marcada «Mostrar al iniciar»). En el live no se abre sola; está en el menú y en el escritorio. Muestra versión, núcleo, Plasma, CPU, RAM y GPU. Los packs de Internet, vídeo, gráficos, audio, juegos y oficina coinciden con lo que ya trae el sistema, así que salen marcados como instalados. El de desarrollo (`code`, Node.js, Docker) no viene preinstalado. También se puede activar Flathub. `pkexec` lanza `pacman`.
+En el sistema instalado, al entrar la primera vez se abre **Bienvenida PekarchOS**. En el live no se abre sola: está en el menú y en el escritorio. Muestra versión, núcleo, Plasma, CPU, RAM y GPU. Los packs que ya trae el sistema salen como instalados. El de desarrollo (`code`, Node.js, Docker) no viene preinstalado; si se elige Docker, se activa el servicio y el usuario entra en el grupo `docker`.
 
-OpenShot no está: salió de los repos oficiales. La ISO puede rondar los 4 GiB. El artefacto de Actions es el archivo entero, para subirlo a Google Drive. Una release de GitHub, si se etiqueta `v*`, parte la ISO porque un asset no puede pasar de 2 GiB.
+Hay una casilla para instalar Google Chrome desde Flathub. Hace falta red.
 
-## Descargar la ISO
+## Descargar
 
-Hace falta acceso al repositorio privado `pekapro-lab/pekarchos`. Nada de esto es público.
+La ISO se construye al publicar una etiqueta `v*` o al lanzar el flujo a mano (**Actions → Construir ISO de PekarchOS → Run workflow**). Un pull request no construye la ISO: solo corre estas comprobaciones y la prueba del instalador en QEMU.
 
-### Desde Actions
+No se sube la ISO como artefacto de Actions: no cabe en la cuota. Si se etiqueta `v*` y la prueba del instalador ha pasado, la release adjunta las partes (menos de 2 GiB cada una) y `SHA256SUMS`. Si la prueba falla, no hay release.
 
-1. Abre la pestaña **Actions**.
-2. Elige el flujo **Construir ISO de PekarchOS**.
-3. Entra en una ejecución en verde.
-4. Al final, en **Artifacts**, descarga `pekarchos-iso`.
-
-El artefacto caduca a los 14 días. El archivo se llama `pekarchos-AAAA.MM.DD-x86_64.iso`. Comprueba la suma con el `SHA256SUMS` que va al lado:
+Las sumas usan el nombre del archivo, sin carpeta `out/`. También está la suma de cada parte, para comprobarlas antes de unirlas.
 
 ```bash
 sha256sum -c SHA256SUMS
-```
-
-El flujo se lanza al abrir una pull request, al empujar a `main`, al publicar una etiqueta `v*` y también a mano (**Run workflow**).
-
-### Desde una release
-
-Solo cuando alguien empuja una etiqueta `v*` (por ejemplo `v0.1.0`). La release queda en el mismo repositorio privado.
-
-GitHub no acepta un archivo de release de 2 GiB o más. Si la ISO se pasa, el flujo la parte. Para unirla:
-
-```bash
-cat pekarchos-*.iso.part* > pekarchos.iso
+cat pekarchos-0.3.0-x86_64.iso.part*.bin > pekarchos-0.3.0-x86_64.iso
 sha256sum -c SHA256SUMS
 ```
+
+En Windows, en la carpeta de las partes:
+
+```bat
+copy /b pekarchos-0.3.0-x86_64.iso.part00.bin+pekarchos-0.3.0-x86_64.iso.part01.bin+pekarchos-0.3.0-x86_64.iso.part02.bin pekarchos-0.3.0-x86_64.iso
+```
+
+En Termux vale el mismo `cat` que en Linux. El número de partes puede cambiar: únelas en orden.
+
+Si en el repositorio están los secretos `SOURCEFORGE_USER`, `SOURCEFORGE_SSH_KEY` y `SOURCEFORGE_PROJECT`, el mismo flujo intenta subir la ISO entera a SourceForge. Sin esos secretos, ese paso no hace nada y no falla.
+
+Las notas de la release salen de [`RELEASE_NOTES.md`](RELEASE_NOTES.md). La plantilla para la siguiente versión es [`PLANTILLA-NOTAS.md`](PLANTILLA-NOTAS.md).
 
 ## Probarla en QEMU
 
-Con KVM, 4 GiB de RAM y la gráfica virtio (Plasma va por Wayland y necesita DRM):
+Con KVM, 4 GiB de RAM y gráfica virtio (Plasma va por Wayland y necesita DRM):
 
 ```bash
 qemu-system-x86_64 \
   -enable-kvm -cpu host -m 4G -smp 2 \
-  -cdrom pekarchos-*.iso -boot d \
+  -cdrom pekarchos-0.3.0-x86_64.iso -boot d \
   -vga virtio \
-  -netdev user,id=n0 -device virtio-net-pci,netdev=n0
-```
-
-Sin ventana gráfica, VNC en el puerto 5901:
-
-```bash
-qemu-system-x86_64 \
-  -enable-kvm -cpu host -m 4G -smp 2 \
-  -cdrom pekarchos-*.iso -boot d \
-  -vga virtio -display vnc=127.0.0.1:1 \
   -netdev user,id=n0 -device virtio-net-pci,netdev=n0
 ```
 
@@ -127,51 +136,39 @@ El primer arranque tarda: tiene que montar el squashfs y levantar Plasma. El esc
 
 ## Probarla en VirtualBox
 
-1. Máquina nueva, tipo Linux, versión Arch o Linux 2.6 / 3.x / 4.x / 5.x (64-bit).
+1. Máquina nueva, tipo Linux, 64 bits.
 2. 4 GiB de RAM, 2 CPUs y al menos 128 MiB de vídeo.
 3. Gráfica VMSVGA o VBoxSVGA.
-4. La ISO como disco óptico. BIOS y UEFI arrancan los dos: Syslinux en BIOS y systemd-boot en UEFI.
-5. La ISO ya lleva `virtualbox-guest-utils`.
+4. La ISO como disco óptico. BIOS (Syslinux) y UEFI (GRUB) arrancan los dos.
+5. La ISO lleva `virtualbox-guest-utils`. En un PC real el instalador las quita.
 
-No instales sobre el disco de la máquina anfitriona. Crea un disco virtual vacío.
+No instales sobre el disco del anfitrión. Crea un disco virtual vacío.
 
 ## Grabarla en un USB
 
-Esto borra el dispositivo que elijas. Mira el nombre con `lsblk` antes de seguir y desmonta sus particiones.
+Esto borra el dispositivo. Mira el nombre con `lsblk` y desmonta sus particiones.
 
-### Ventoy
-
-Instala Ventoy en el USB y copia la ISO a la partición de datos. Ventoy arranca la ISO sin volver a grabar el dispositivo.
-
-### balenaEtcher
-
-Abre Etcher, elige la ISO, elige el USB y pulsa Flash. No hace falta descomprimir nada.
-
-### dd
-
-Sustituye `/dev/sdX` por el disco entero, no por una partición (`/dev/sdX`, no `/dev/sdX1`):
+Ventoy, balenaEtcher o `dd` valen. Con `dd`, el destino es el disco entero, no una partición:
 
 ```bash
-sudo dd if=pekarchos-AAAA.MM.DD-x86_64.iso of=/dev/sdX bs=4M status=progress conv=fsync
+sudo dd if=pekarchos-0.3.0-x86_64.iso of=/dev/sdX bs=4M status=progress conv=fsync
 ```
 
 ## Copia de seguridad
 
-**Antes de instalar, copia lo que no quieras perder.** El instalador puede borrar un disco entero. Revisa el dispositivo en el resumen del instalador. Si no estás seguro de cuál es, cancela.
+**Antes de instalar, copia lo que no quieras perder.** El instalador puede borrar un disco entero. El medio en vivo no toca los discos hasta que lo confirmas.
 
-El medio en vivo no toca los discos hasta que lo confirmas en el instalador.
+## Construirla
 
-## Construirla en local
-
-En Arch Linux, como root:
+En Arch Linux, como root, con red:
 
 ```bash
 sudo ./scripts/build-iso.sh
 ```
 
-La ISO queda en `out/`. Hacen falta red, `archiso` y bastante disco (el árbol de trabajo ocupa varios GiB; el script lo borra al terminar).
+La ISO queda en `out/`, con `SHA256SUMS` al lado (nombres sin ruta). Hacen falta `archiso` y varios GiB libres.
 
-En otra distro vale el mismo contenedor que usa Actions:
+En otra distro, el mismo contenedor que usa Actions:
 
 ```bash
 mkdir -p out
@@ -180,22 +177,42 @@ docker run --privileged --rm \
   archlinux:latest bash /src/scripts/build-iso.sh
 ```
 
-`--privileged` hace falta porque `mkarchiso` monta sistemas de archivos.
-
-Para regenerar el fondo y el logotipo (no hace falta para construir la ISO; los PNG ya están en el repo):
+Para regenerar el fondo (CC0), sin tocar el logotipo:
 
 ```bash
 python3 tools/generate_assets.py
 ```
 
+Para regenerar iconos, splash, Plymouth y el fondo del tema de GRUB a partir del logo oficial:
+
+```bash
+python3 tools/make_logo_icons.py
+```
+
+Hace falta Pillow solo para esos dos scripts, no para construir la ISO.
+
+Comprobaciones sin construir la ISO:
+
+```bash
+bash scripts/check.sh
+bash scripts/test-install-qemu.sh
+```
+
 ## Limitaciones de esta versión
 
 - Es un rolling de Arch: la ISO es una foto del día en que se construyó.
-- `pekarchos-install` copia el live y no necesita red. `pekarchos-install --archinstall` sí la necesita.
-- No hay sesión X11 de Plasma en los repos oficiales ahora mismo.
-- En el live no van `linux-firmware-nvidia`, `linux-firmware-atheros`, `linux-firmware-mediatek` ni `linux-firmware-other`, ni la fuente de emoji: con el metapaquete entero la ISO pasa de 2 GiB y GitHub no admite ese asset en una release. Esos paquetes se instalan con pacman si el equipo los necesita. En el disco, archinstall sí instala el metapaquete `linux-firmware` completo.
-- El live tampoco lleva `open-vm-tools` ni las páginas de manual en español. El perfil de archinstall pide `noto-fonts-emoji` y `man-pages-es` para el sistema instalado.
-- GitHub Actions tiene poca cuota de artefactos en los planes gratuitos, y cada asset de una release tiene que pesar menos de 2 GiB. Si la ISO se pasa, la release va en partes; el artefacto del flujo intenta subir el archivo entero.
-- `customize_airootfs.sh` sigue funcionando en el archiso actual, pero aguas arriba está marcado como obsoleto.
-- El fondo se aplica en el primer inicio de sesión. Hasta ese momento se ve el fondo de Breeze.
-- El teclado de Plasma queda en `es` por el esqueleto de usuario. En el instalador también se puede cambiar.
+- No hay sesión X11 de Plasma.
+- El controlador legado NVIDIA 390 (Fermi, por ejemplo una GTX 570) no entra. Nouveau en Wayland puede dejar Chrome o Chromium en blanco: al iniciar sesión, si el controlador es nouveau, se escribe `--disable-gpu` y `--ozone-platform-hint=auto`. No se fuerza `--ozone-platform=wayland`, porque eso rompe las sesiones X11.
+- Plymouth con nouveau antiguo puede dejar la pantalla a oscuras. La entrada de gráficos seguros no lo carga.
+- Calamares y un repositorio propio de paquetes `[pekarchos]` quedan para más adelante. El instalador de esta versión es el de terminal.
+- `customize_airootfs.sh` sigue funcionando, pero aguas arriba está marcado como obsoleto.
+- El fondo de Plasma se aplica en el primer inicio de sesión. Hasta entonces se ve el de Breeze.
+- Idioma, teclado y zona del live están fijos en español, España y Madrid.
+
+## Avisos y licencia
+
+El código (perfil, instalador, construcción y el flujo de Actions) es GPL-3.0-or-later. El texto está en [LICENSE](LICENSE).
+
+El logotipo es CC BY-SA 4.0, de Peka / Pekapro. El resto del arte original de Pekapro (fondo, esquemas, tema QML de SDDM) es CC0-1.0. Detalle en [LICENSE-ARTWORK](LICENSE-ARTWORK), [CREDITS.md](CREDITS.md) y [THIRD-PARTY.md](THIRD-PARTY.md).
+
+Para informar de un fallo, abre una incidencia en el repositorio con el modelo del equipo, si arrancaste en BIOS o UEFI, la entrada del menú y, si el sistema ya está instalado, `journalctl -b -1 -k`.

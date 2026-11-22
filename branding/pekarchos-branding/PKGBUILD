@@ -1,26 +1,42 @@
 # Maintainer: Pekapro
 pkgname=pekarchos-branding
-pkgver=0.3.0
+if [[ -z "${startdir:-}" ]]; then
+	startdir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+fi
+_version_file="${startdir}/VERSION"
+if [[ ! -f "${_version_file}" ]]; then
+	_version_file="${startdir}/../../VERSION"
+fi
+if [[ ! -f "${_version_file}" ]]; then
+	echo "PKGBUILD: no está el archivo VERSION de PekarchOS." >&2
+	exit 1
+fi
+pkgver=$(tr -d '[:space:]' < "${_version_file}")
 pkgrel=1
 pkgdesc='Marca, iconos, bienvenida y ajustes visuales de PekarchOS'
 arch=(any)
 url='https://github.com/pekapro-lab/pekarchos'
-license=('CC0-1.0' 'GPL-3.0-or-later')
-depends=('bash' 'python-pyqt6')
+license=('CC0-1.0' 'CC-BY-SA-4.0' 'GPL-3.0-or-later')
+depends=('bash' 'python-pyqt6' 'plymouth' 'hicolor-icon-theme')
 install="${pkgname}.install"
 options=('!debug')
 sha256sums=()
 
 package() {
 	cp -a "${startdir}/root/." "${pkgdir}/"
+	install -Dm644 "${_version_file}" "${pkgdir}/usr/share/pekarchos/VERSION"
+	sed -i "s/@PEKARCHOS_VERSION@/${pkgver}/g" \
+		"${pkgdir}/usr/share/pekarchos/os-release" \
+		"${pkgdir}/etc/xdg/kcm-about-distrorc"
+	if grep -q '@PEKARCHOS_VERSION@' "${pkgdir}/usr/share/pekarchos/os-release"; then
+		echo "No se sustituyó la versión en os-release." >&2
+		exit 1
+	fi
 	if compgen -G "${pkgdir}/usr/local/bin/*" >/dev/null; then
 		chmod 755 "${pkgdir}/usr/local/bin/"*
 	fi
-	if [[ -f "${pkgdir}/usr/lib/pekarchos/install-chroot.sh" ]]; then
-		chmod 755 "${pkgdir}/usr/lib/pekarchos/install-chroot.sh"
-	fi
-	if [[ -f "${pkgdir}/usr/share/pekarchos/postinstall.sh" ]]; then
-		chmod 755 "${pkgdir}/usr/share/pekarchos/postinstall.sh"
+	if compgen -G "${pkgdir}/usr/lib/pekarchos/"*.sh >/dev/null; then
+		chmod 755 "${pkgdir}/usr/lib/pekarchos/"*.sh
 	fi
 	find "${pkgdir}" -type d -exec chmod 755 {} +
 }

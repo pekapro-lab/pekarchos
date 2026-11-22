@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Ajustes de GPU de PekarchOS
+Comment=Opciones de Chromium solo cuando el controlador es nouveau
+Exec=/usr/local/bin/pekarchos-gpu-quirks
+Terminal=false
+NoDisplay=true
+X-GNOME-Autostart-enabled=true
+X-KDE-autostart-phase=1

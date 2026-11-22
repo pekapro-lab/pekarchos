@@ -30,14 +30,14 @@ from PyQt6.QtWidgets import (
 
 CONFIG = Path.home() / ".config" / "pekarchos" / "welcome.conf"
 INSTALLER = "/usr/local/bin/pekarchos-welcome-install"
-LOGO = "/usr/share/pekarchos/logo.png"
+LOGO = "/usr/share/pekarchos/logo-full.png"
 
 PACKS = [
     {
         "id": "internet",
         "title": "Internet",
-        "blurb": "Firefox, Google Chrome (navegador por defecto), wget, Falkon y KTorrent.",
-        "packages": ["firefox", "google-chrome", "wget", "falkon", "ktorrent"],
+        "blurb": "Firefox (navegador por defecto), wget, Falkon y KTorrent.",
+        "packages": ["firefox", "wget", "falkon", "ktorrent"],
         "multilib": False,
     },
     {
@@ -87,7 +87,7 @@ PACKS = [
     {
         "id": "dev",
         "title": "Desarrollo",
-        "blurb": "VS Code (paquete code, compilación abierta, MIT), Python, Node.js y Docker. No vienen preinstalados.",
+        "blurb": "VS Code (paquete code, compilación abierta, MIT), Python, Node.js y Docker. Docker se activa y tu usuario entra en el grupo docker. No vienen preinstalados.",
         "packages": ["code", "python", "nodejs", "docker"],
         "multilib": False,
     },
@@ -220,6 +220,21 @@ def package_installed(name: str) -> bool:
     return subprocess.call(["pacman", "-Q", name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0
 
 
+def chrome_installed() -> bool:
+    if package_installed("google-chrome"):
+        return True
+    if shutil.which("flatpak") is None:
+        return False
+    return (
+        subprocess.call(
+            ["flatpak", "info", "com.google.Chrome"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        == 0
+    )
+
+
 def load_show_on_start() -> bool:
     if not CONFIG.is_file():
         return True
@@ -256,7 +271,7 @@ class Welcome(QWidget):
         logo = QLabel()
         pixmap = QPixmap(LOGO)
         if not pixmap.isNull():
-            logo.setPixmap(pixmap.scaled(88, 88, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+            logo.setPixmap(pixmap.scaled(200, 200, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
         header.addWidget(logo)
         titles = QVBoxLayout()
         title = QLabel("PekarchOS")
@@ -297,6 +312,16 @@ class Welcome(QWidget):
         flatpak_hint.setWordWrap(True)
         grid.addWidget(self.flatpak, len(PACKS), 0)
         grid.addWidget(flatpak_hint, len(PACKS), 1)
+        self.chrome = QCheckBox("Instalar Google Chrome desde Flathub")
+        self.chrome.setChecked(chrome_installed())
+        chrome_hint = QLabel(
+            "Firefox es el navegador por defecto y va en la ISO. Chrome no se redistribuye: "
+            "se baja de Flathub (com.google.Chrome) y se actualiza solo. Hace falta red."
+        )
+        chrome_hint.setObjectName("muted")
+        chrome_hint.setWordWrap(True)
+        grid.addWidget(self.chrome, len(PACKS) + 1, 0)
+        grid.addWidget(chrome_hint, len(PACKS) + 1, 1)
         grid.setColumnStretch(1, 1)
 
         scroll = QScrollArea()
@@ -352,7 +377,7 @@ class Welcome(QWidget):
                 continue
             packages.extend(pack["packages"])
             multilib = multilib or bool(pack["multilib"])
-        if not packages and not self.flatpak.isChecked():
+        if not packages and not self.flatpak.isChecked() and not self.chrome.isChecked():
             self.log.setPlainText("No hay nada seleccionado.")
             return
         if not Path(INSTALLER).is_file():
@@ -363,6 +388,8 @@ class Welcome(QWidget):
             args.append("--enable-multilib")
         if self.flatpak.isChecked():
             args.append("--flathub")
+        if self.chrome.isChecked():
+            args.append("--chrome")
         args.append("--")
         args.extend(packages)
         self.log.clear()
@@ -400,6 +427,11 @@ class Welcome(QWidget):
                 box.setChecked(True)
             else:
                 box.setText(title)
+        if chrome_installed():
+            self.chrome.setText("Instalar Google Chrome desde Flathub  (instalado)")
+            self.chrome.setChecked(True)
+        else:
+            self.chrome.setText("Instalar Google Chrome desde Flathub")
 
 
 def main() -> int:
