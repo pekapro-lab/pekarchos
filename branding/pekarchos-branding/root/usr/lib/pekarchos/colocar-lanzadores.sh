@@ -63,6 +63,7 @@ copiar() {
 copiar /usr/share/applications/pekarchos-welcome.desktop
 if [[ "${en_vivo}" -eq 1 ]]; then
 	copiar /usr/share/applications/pekarchos-install.desktop
+	copiar /usr/share/applications/pekarchos-calamares.desktop
 	if [[ -f /usr/share/pekarchos/LEEME.txt ]]; then
 		install -m 0644 -o "${usuario}" -g "${usuario}" /usr/share/pekarchos/LEEME.txt "${escritorio}/LEEME.txt"
 	fi

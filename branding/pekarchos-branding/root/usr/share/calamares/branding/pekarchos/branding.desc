@@ -1,0 +1,28 @@
+---
+componentName: pekarchos
+welcomeStyleCalamares: true
+welcomeExpandingLogo: true
+strings:
+  productName: PekarchOS
+  shortProductName: PekarchOS
+  version: "@PEKARCHOS_VERSION@"
+  shortVersion: "@PEKARCHOS_VERSION@"
+  versionedName: PekarchOS @PEKARCHOS_VERSION@
+  shortVersionedName: PekarchOS @PEKARCHOS_VERSION@
+  bootloaderEntryName: PekarchOS
+  productUrl: https://github.com/pekapro-lab/pekarchos
+  supportUrl: https://github.com/pekapro-lab/pekarchos/issues
+  knownIssuesUrl: https://github.com/pekapro-lab/pekarchos/issues
+  releaseNotesUrl: https://github.com/pekapro-lab/pekarchos
+  donateUrl: https://github.com/pekapro-lab/pekarchos
+images:
+  productLogo: logo.png
+  productIcon: logo.png
+  productWelcome: logo-full.png
+slideshow: show.qml
+slideshowAPI: 2
+style:
+  sidebarBackground: "#070712"
+  sidebarText: "#e2f4ff"
+  sidebarTextSelect: "#ff2bd6"
+  sidebarTextHighlight: "#00f0ff"

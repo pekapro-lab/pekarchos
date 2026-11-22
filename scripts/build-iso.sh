@@ -34,6 +34,10 @@ fi
 if [[ ! -f /usr/share/grub/unicode.pf2 ]]; then
 	pacman -S --noconfirm --needed grub
 fi
+if [[ -f /etc/makepkg.conf ]] && ! grep -q 'pekarchos-nodebug' /etc/makepkg.conf; then
+	# Sin esto, makepkg deja un paquete -debug enorme (Calamares pasa de 60 MiB).
+	printf '\n# pekarchos-nodebug\nOPTIONS+=(!debug)\n' >>/etc/makepkg.conf
+fi
 if ! command -v python3 >/dev/null; then
 	pacman -S --noconfirm --needed python
 fi
@@ -95,6 +99,23 @@ aur_build() {
 		return 1
 	fi
 	rm -rf "${tmp}/.git"
+	if [[ "${name}" == "calamares-git" ]]; then
+		python3 - "${tmp}/PKGBUILD" <<'PY'
+import pathlib, sys
+path = pathlib.Path(sys.argv[1])
+text = path.read_text()
+old = 'source=("git+${url}.git")'
+new = 'source=("git+${url}.git#commit=d62849a39a97dbcd4bd9389ebc38e9643a81fa86")'
+if old not in text:
+    raise SystemExit("el PKGBUILD de calamares-git ya no clona el git sin commit")
+text = text.replace(old, new, 1)
+if "-DWITH_PYTHONQT=ON" in text:
+    text = text.replace("-DWITH_PYTHONQT=ON", "-DWITH_PYTHON=ON", 1)
+elif "-DWITH_PYTHON=ON" not in text:
+    raise SystemExit("el PKGBUILD de calamares-git no activa Python")
+path.write_text(text)
+PY
+	fi
 	if [[ "${name}" == "foobillard++" ]]; then
 		# El PKGBUILD ya quita inline y freetype-config. GCC actual además
 		# rechaza abs() sobre un float. No se añade otra función prepare():
@@ -127,6 +148,14 @@ try_aur() {
 		AUR_DROPPED+=("$1")
 	fi
 }
+aur_build_required() {
+	if ! aur_build "$1" "$2"; then
+		echo "ERROR: ${1} es obligatorio. La ISO no se construye sin él." >&2
+		exit 1
+	fi
+}
+aur_build_required calamares-git "$(tr -d '[:space:]' < "${ROOT}/branding/pins/calamares-git.commit")"
+aur_build_required ckbcomp "$(tr -d '[:space:]' < "${ROOT}/branding/pins/ckbcomp.commit")"
 try_aur dxvk-bin "$(tr -d '[:space:]' < "${ROOT}/branding/pins/dxvk-bin.commit")"
 try_aur playonlinux "$(tr -d '[:space:]' < "${ROOT}/branding/pins/playonlinux.commit")"
 try_aur "foobillard++" "$(tr -d '[:space:]' < "${ROOT}/branding/pins/foobillard++.commit")"

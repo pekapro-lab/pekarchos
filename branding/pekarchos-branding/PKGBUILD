@@ -25,11 +25,16 @@ sha256sums=()
 package() {
 	cp -a "${startdir}/root/." "${pkgdir}/"
 	install -Dm644 "${_version_file}" "${pkgdir}/usr/share/pekarchos/VERSION"
+	marca="${pkgdir}/usr/share/calamares/branding/pekarchos"
+	install -d "${marca}"
+	cp -a "${pkgdir}/usr/share/pekarchos/logo.png" "${marca}/logo.png"
+	cp -a "${pkgdir}/usr/share/pekarchos/logo-full.png" "${marca}/logo-full.png"
 	sed -i "s/@PEKARCHOS_VERSION@/${pkgver}/g" \
 		"${pkgdir}/usr/share/pekarchos/os-release" \
-		"${pkgdir}/etc/xdg/kcm-about-distrorc"
-	if grep -q '@PEKARCHOS_VERSION@' "${pkgdir}/usr/share/pekarchos/os-release"; then
-		echo "No se sustituyó la versión en os-release." >&2
+		"${pkgdir}/etc/xdg/kcm-about-distrorc" \
+		"${marca}/branding.desc"
+	if grep -q '@PEKARCHOS_VERSION@' "${pkgdir}/usr/share/pekarchos/os-release" "${marca}/branding.desc"; then
+		echo "No se sustituyó la versión en os-release o en Calamares." >&2
 		exit 1
 	fi
 	if compgen -G "${pkgdir}/usr/local/bin/*" >/dev/null; then

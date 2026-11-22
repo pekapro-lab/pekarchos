@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Instalar PekarchOS (gráfico)
+GenericName=Instalar el sistema
+Comment=Instalador Calamares. El de terminal sigue en el menú.
+Exec=/usr/local/bin/pekarchos-calamares
+Icon=pekarchos
+Terminal=false
+Categories=System;
+StartupNotify=true

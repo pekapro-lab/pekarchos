@@ -50,6 +50,13 @@ Chrome no se redistribuye. Los términos del binario no permiten meterlo en la I
 - Licencia: GPL-2.0
 - El código de 3.42beta no declara `abs` sobre un `float` y GCC actual lo rechaza. La construcción añade `#include <math.h>` y cambia esa llamada a `fabsf`. El Makefile llama a `freetype-config`, que freetype2 ya no instala; en el contenedor de construcción se sustituye por `pkg-config freetype2`.
 
+## Calamares
+
+- [Calamares](https://codeberg.org/Calamares/calamares), GPL-3.0-or-later
+- El paquete sale del AUR `calamares-git` en el commit de `branding/pins/calamares-git.commit`
+- El código de Calamares queda fijado en `d62849a39a97dbcd4bd9389ebc38e9643a81fa86`, compilado con Python (`WITH_PYTHON`)
+- [ckbcomp](https://salsa.debian.org/installer-team/console-setup) (GPL-2.0-or-later), commit en `branding/pins/ckbcomp.commit`, para la vista previa del teclado
+
 ## Resto
 
 - archiso `releng`: GPL-3.0-or-later, Arch Linux

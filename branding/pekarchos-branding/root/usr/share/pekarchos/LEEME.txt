@@ -11,8 +11,10 @@ live puede usar sudo sin contraseña.
 El navegador por defecto es Firefox. Google Chrome no viene
 en la ISO: la bienvenida puede instalarlo desde Flathub.
 
-Para instalar PekarchOS en un disco, abre «Instalar PekarchOS»
-en el menú o en el escritorio. Copia este mismo sistema al disco
+Para instalar PekarchOS en un disco puedes abrir
+«Instalar PekarchOS (gráfico)», que es Calamares, o
+«Instalar PekarchOS», que es el instalador de terminal.
+Los dos copian este mismo sistema al disco
 (neón, iconos y programas incluidos), sin internet.
 Pide el disco, si borrarlo entero o usar una partición (para
 convivir con Windows), tu usuario y tu contraseña.

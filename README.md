@@ -64,7 +64,11 @@ No es el metapaquete `linux-firmware` entero: faltan, entre otros, Atheros y Med
 
 ## Instalador
 
-El icono **Instalar PekarchOS** abre `pekarchos-install`. Copia el live al disco (como EndeavourOS o Manjaro), sin internet. Lo instalado queda con el mismo tema, los mismos programas y el mismo firmware de la ISO.
+Hay dos instaladores en el live. Los dos dejan Plasma en Wayland.
+
+**Instalar PekarchOS (gráfico)** abre Calamares. Copia el live al disco y, si hay red, deja añadir escritorios (XFCE, Cinnamon y MATE en X11; GNOME en Wayland; LXQt en las dos) y el controlador `nvidia-open` para NVIDIA Turing o más nueva. La serie 390 no se puede elegir: el gancho está, y no instala nada del AUR. Se puede borrar el disco, instalar al lado de Windows o particionar a mano. El idioma y el teclado salen en español y se pueden cambiar. GRUB detecta Windows.
+
+El icono **Instalar PekarchOS** abre `pekarchos-install`, el instalador de terminal. Copia el live al disco sin internet. Lo instalado queda con el mismo tema, los mismos programas y el mismo firmware de la ISO. La bienvenida también tiene un botón para Calamares.
 
 1. Aviso y detección de UEFI o BIOS.
 2. Elegir el disco (no se ofrece el USB del live).

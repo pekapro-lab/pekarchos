@@ -110,6 +110,9 @@ EOF
 
 	install -D -m755 "${INST}" /usr/local/bin/pekarchos-install
 	install -D -m755 "${HELPER}" /usr/lib/pekarchos/install-chroot.sh
+	for extra in /src/branding/pekarchos-branding/root/usr/lib/pekarchos/*.sh; do
+		install -D -m755 "${extra}" "/usr/lib/pekarchos/$(basename "${extra}")"
+	done
 	cat >/usr/local/bin/pekarchos-probar <<EOF
 #!/bin/bash
 set -euo pipefail
