@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Instalar PekarchOS
+GenericName=Instalar el sistema
+Comment=Copiar PekarchOS tal cual al disco (sin internet)
+Exec=/usr/bin/konsole --hold -e sudo /usr/local/bin/pekarchos-install
+Icon=/usr/share/pekarchos/logo.png
+Terminal=false
+Categories=System;
+StartupNotify=true

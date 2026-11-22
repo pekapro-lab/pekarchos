@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+# Instala paquetes de la bienvenida. Lo lanza pkexec; escribe el registro por stdout.
+set -euo pipefail
+
+if [[ "${EUID}" -ne 0 ]]; then
+	echo "pekarchos-welcome-install tiene que ejecutarse como root (pkexec)." >&2
+	exit 1
+fi
+
+enable_multilib=0
+enable_flathub=0
+packages=()
+while [[ $# -gt 0 ]]; do
+	case "$1" in
+	--enable-multilib) enable_multilib=1 ;;
+	--flathub) enable_flathub=1 ;;
+	--)
+		shift
+		packages+=("$@")
+		break
+		;;
+	*) packages+=("$1") ;;
+	esac
+	shift
+done
+
+if [[ "${enable_multilib}" -eq 1 ]]; then
+	echo "==> Activando el repositorio multilib"
+	if grep -q '^\[multilib\]' /etc/pacman.conf; then
+		echo "multilib ya estaba activo."
+	elif grep -q '^#\[multilib\]' /etc/pacman.conf; then
+		awk '
+			/^#\[multilib\]$/ { print "[multilib]"; getline; if ($0 ~ /^#Include/) sub(/^#/, ""); print; next }
+			{ print }
+		' /etc/pacman.conf >/etc/pacman.conf.pekarchos
+		mv /etc/pacman.conf.pekarchos /etc/pacman.conf
+		echo "Se descomentó [multilib] en /etc/pacman.conf."
+	else
+		cat >>/etc/pacman.conf <<'EOF'
+
+[multilib]
+Include = /etc/pacman.d/mirrorlist
+EOF
+		echo "Se añadió [multilib] a /etc/pacman.conf."
+	fi
+fi
+
+echo "==> Sincronizando bases de datos"
+pacman -Sy --noconfirm
+
+installable=()
+for pkg in "${packages[@]}"; do
+	if pacman -Si "${pkg}" >/dev/null 2>&1; then
+		installable+=("${pkg}")
+	else
+		echo "AVISO: ${pkg} no está en los repositorios oficiales; se omite."
+		if [[ "${pkg}" == "openshot" ]]; then
+			echo "OpenShot salió de extra. En el AUR el empaquetado actual no construye en este Arch."
+		fi
+	fi
+done
+
+if [[ ${#installable[@]} -gt 0 ]]; then
+	echo "==> Instalando: ${installable[*]}"
+	pacman -S --needed --noconfirm "${installable[@]}"
+else
+	echo "No hay paquetes oficiales nuevos que instalar."
+fi
+
+if [[ "${enable_flathub}" -eq 1 ]]; then
+	echo "==> Flatpak y Flathub"
+	pacman -S --needed --noconfirm flatpak
+	flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+	echo "Remoto Flathub listo."
+fi
+
+echo "==> Hecho"

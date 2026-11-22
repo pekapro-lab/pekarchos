@@ -1,0 +1,27 @@
+PekarchOS
+=========
+
+Esto es el sistema en vivo. El escritorio entra solo.
+
+  Usuario:     live
+  Contraseña:  live
+
+live puede usar sudo sin contraseña.
+
+Para instalar PekarchOS en un disco, abre «Instalar PekarchOS»
+en el menú de aplicaciones o en el escritorio. Copia este mismo
+sistema al disco (neón, iconos y programas incluidos), sin internet.
+Pide el disco, si borrarlo entero o usar una partición (para
+convivir con Windows), tu usuario y tu contraseña.
+Alternativa: «sudo pekarchos-install --archinstall» instala un
+Arch limpio con archinstall (necesita red).
+
+«Bienvenida PekarchOS» muestra el equipo y paquetes opcionales
+(vídeo, juegos, gráficos…). En el live no se abre sola.
+
+Antes de instalar, haz una copia de seguridad. Elegir mal el
+disco borra lo que hubiera en él.
+
+Idioma del medio: español (es_ES.UTF-8)
+Teclado: es
+Zona horaria: Europe/Madrid

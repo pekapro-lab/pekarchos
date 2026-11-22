@@ -1,0 +1,5 @@
+/* PekarchOS: el grupo wheel administra polkit, así pkexec pide la
+   contraseña del usuario instalado (archinstall lo mete en wheel). */
+polkit.addAdminRule(function(action, subject) {
+    return ["unix-group:wheel"];
+});

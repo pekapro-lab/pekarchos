@@ -1,0 +1,10 @@
+[General]
+AccentColor=255,43,214
+ColorScheme=PekarchOSNeonMagenta
+
+[Icons]
+Theme=candy-icons
+
+[KDE]
+LookAndFeelPackage=org.kde.breezedark.desktop
+widgetStyle=Breeze

@@ -1,0 +1,26 @@
+# Maintainer: Pekapro
+pkgname=pekarchos-branding
+pkgver=0.3.0
+pkgrel=1
+pkgdesc='Marca, iconos, bienvenida y ajustes visuales de PekarchOS'
+arch=(any)
+url='https://github.com/pekapro-lab/pekarchos'
+license=('CC0-1.0' 'GPL-3.0-or-later')
+depends=('bash' 'python-pyqt6')
+install="${pkgname}.install"
+options=('!debug')
+sha256sums=()
+
+package() {
+	cp -a "${startdir}/root/." "${pkgdir}/"
+	if compgen -G "${pkgdir}/usr/local/bin/*" >/dev/null; then
+		chmod 755 "${pkgdir}/usr/local/bin/"*
+	fi
+	if [[ -f "${pkgdir}/usr/lib/pekarchos/install-chroot.sh" ]]; then
+		chmod 755 "${pkgdir}/usr/lib/pekarchos/install-chroot.sh"
+	fi
+	if [[ -f "${pkgdir}/usr/share/pekarchos/postinstall.sh" ]]; then
+		chmod 755 "${pkgdir}/usr/share/pekarchos/postinstall.sh"
+	fi
+	find "${pkgdir}" -type d -exec chmod 755 {} +
+}

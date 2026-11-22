@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Bienvenida PekarchOS
+Comment=Se abre al entrar en un sistema instalado
+Exec=/usr/local/bin/pekarchos-welcome --autostart
+Icon=/usr/share/pekarchos/logo.png
+Terminal=false
+OnlyShowIn=KDE;
+X-KDE-autostart-phase=2
+X-GNOME-Autostart-enabled=true
+NoDisplay=true

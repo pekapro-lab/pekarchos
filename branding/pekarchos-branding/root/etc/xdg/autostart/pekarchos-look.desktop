@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Aspecto de PekarchOS
+Comment=Fondo y colores de PekarchOS en el primer inicio
+Exec=/usr/local/bin/pekarchos-apply-look
+OnlyShowIn=KDE;
+X-KDE-autostart-phase=2
+X-KDE-StartupNotify=false
+NoDisplay=true

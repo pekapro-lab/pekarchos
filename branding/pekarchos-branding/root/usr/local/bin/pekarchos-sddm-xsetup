@@ -1,0 +1,9 @@
+#!/bin/sh
+# Teclado español del greeter. SDDM no siempre aplica xorg.conf.d y se queda en US.
+if [ -x /usr/share/sddm/scripts/Xsetup ]; then
+	/usr/share/sddm/scripts/Xsetup
+fi
+if command -v setxkbmap >/dev/null 2>&1; then
+	setxkbmap -layout es -model pc105 || setxkbmap -layout es || true
+fi
+exit 0

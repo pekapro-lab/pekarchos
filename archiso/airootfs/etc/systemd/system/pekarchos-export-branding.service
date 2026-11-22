@@ -1,0 +1,14 @@
+[Unit]
+Description=Exportar la marca de PekarchOS al instalador
+ConditionPathExists=/run/archiso/bootmnt
+DefaultDependencies=no
+After=local-fs.target
+Before=multi-user.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/pekarchos-export-branding
+
+[Install]
+WantedBy=multi-user.target

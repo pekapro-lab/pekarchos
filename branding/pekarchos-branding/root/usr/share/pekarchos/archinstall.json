@@ -1,0 +1,137 @@
+{
+  "script": "guided",
+  "archinstall-language": "Spanish",
+  "hostname": "pekarchos",
+  "timezone": "Europe/Madrid",
+  "ntp": true,
+  "kernels": [
+    "linux"
+  ],
+  "swap": {
+    "enabled": true,
+    "algorithm": "zstd"
+  },
+  "locale_config": {
+    "kb_layout": "es",
+    "sys_lang": "es_ES",
+    "sys_enc": "UTF-8",
+    "console_font": "lat9w-16"
+  },
+  "bootloader_config": {
+    "bootloader": "Grub",
+    "uki": false,
+    "removable": true
+  },
+  "network_config": {
+    "type": "nm"
+  },
+  "profile_config": {
+    "profile": {
+      "main": "Desktop",
+      "details": [
+        "KDE Plasma"
+      ],
+      "custom_settings": {
+        "KDE Plasma": {
+          "plasma_flavor": "plasma-desktop"
+        }
+      }
+    },
+    "gfx_driver": "All open-source",
+    "greeter": "sddm"
+  },
+  "app_config": {
+    "audio_config": {
+      "audio": "pipewire"
+    },
+    "bluetooth_config": {
+      "enabled": true
+    },
+    "print_service_config": {
+      "enabled": true
+    },
+    "power_management_config": {
+      "power_management": "power-profiles-daemon"
+    },
+    "fonts_config": {
+      "fonts": [
+        "noto-fonts",
+        "noto-fonts-emoji",
+        "ttf-liberation",
+        "ttf-dejavu"
+      ]
+    }
+  },
+  "pacman_config": {
+    "color": true,
+    "parallel_downloads": 5
+  },
+  "packages": [
+    "firefox",
+    "firefox-i18n-es-es",
+    "libreoffice-fresh",
+    "libreoffice-fresh-es",
+    "hyphen-es",
+    "mythes-es",
+    "vlc",
+    "gimp",
+    "hunspell-es_es",
+    "git",
+    "base-devel",
+    "flatpak",
+    "discover",
+    "packagekit",
+    "packagekit-qt6",
+    "flatpak-kcm",
+    "archlinux-appstream-data",
+    "dolphin",
+    "konsole",
+    "kate",
+    "ark",
+    "spectacle",
+    "fastfetch",
+    "noto-fonts",
+    "noto-fonts-emoji",
+    "ttf-liberation",
+    "ttf-dejavu",
+    "man-pages-es",
+    "sof-firmware",
+    "bash-completion",
+    "power-profiles-daemon",
+    "cups",
+    "cups-pdf",
+    "print-manager",
+    "system-config-printer",
+    "bluez",
+    "bluez-utils",
+    "bluedevil",
+    "plasma-nm",
+    "plasma-pa",
+    "mesa-utils",
+    "falkon",
+    "ktorrent",
+    "obs-studio",
+    "kdenlive",
+    "shotcut",
+    "guvcview",
+    "handbrake",
+    "frei0r-plugins",
+    "ffmpeg",
+    "blender",
+    "krita",
+    "vokoscreen",
+    "audacity",
+    "hydrogen",
+    "yoshimi",
+    "elisa",
+    "wine-staging",
+    "lutris",
+    "winetricks",
+    "gamemode",
+    "mangohud"
+  ],
+  "services": [],
+  "custom_commands": [
+    "bash /run/pekarchos/postinstall.sh"
+  ]
+}
