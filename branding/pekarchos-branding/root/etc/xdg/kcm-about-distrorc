@@ -1,0 +1,6 @@
+[General]
+LogoPath=/usr/share/pekarchos/logo-full.png
+Name=PekarchOS
+Website=https://github.com/pekapro-lab/pekarchos
+Version=@PEKARCHOS_VERSION@
+Variant=Plasma

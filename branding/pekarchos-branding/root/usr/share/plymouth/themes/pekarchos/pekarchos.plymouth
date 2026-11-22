@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=PekarchOS
+Description=Arranque de PekarchOS
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/pekarchos
+ScriptFile=/usr/share/plymouth/themes/pekarchos/pekarchos.script

@@ -272,7 +272,7 @@ arrancar() {
 	local -a qemu
 	read -r -a qemu <<<"$(qemu_bin)"
 	local -a args=(
-		-machine pc,accel=kvm:tcg
+		-machine "pc,accel=kvm:tcg"
 		-m 1280
 		-smp 2
 		-drive "file=${img},format=raw,if=ide,index=0,media=disk"
@@ -444,7 +444,7 @@ log "Instalando dentro de QEMU con el núcleo de Arch"
 read -r -a QEMU <<<"$(qemu_bin)"
 esperar_serie 45450 PEKARCHOS_INSTALLS_OK 2400 "${WORK}/serial-instalacion.log" \
 	"${QEMU[@]}" \
-	-machine pc,accel=kvm:tcg \
+	-machine "pc,accel=kvm:tcg" \
 	-m 2048 -smp 2 \
 	-kernel "${WORK}/vmlinuz" \
 	-initrd "${WORK}/initramfs" \

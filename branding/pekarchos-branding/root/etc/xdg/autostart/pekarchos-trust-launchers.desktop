@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Lanzadores de confianza de PekarchOS
+Comment=Marca los accesos del escritorio como ejecutables y de confianza
+Exec=/usr/local/bin/pekarchos-trust-launchers
+Terminal=false
+NoDisplay=true
+X-GNOME-Autostart-enabled=true
+X-KDE-autostart-phase=1

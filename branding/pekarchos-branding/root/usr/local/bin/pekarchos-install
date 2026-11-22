@@ -303,6 +303,8 @@ pedir_usuario() {
 				echo "La contraseña de root es obligatoria si eliges ponerla."
 				continue
 			fi
+			# r2 lo asigna leer_secreto con printf -v.
+			# shellcheck disable=SC2154
 			if [[ "${ROOTPASS}" != "${r2}" ]]; then
 				echo "No coinciden. Otra vez."
 				continue

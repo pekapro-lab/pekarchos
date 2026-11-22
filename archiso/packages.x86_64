@@ -4,14 +4,15 @@
 base
 base-devel
 linux
-# Subconjunto del firmware. El metapaquete linux-firmware pasa de 2 GiB la ISO
-# (límite de un asset en GitHub Releases). archinstall instala el metapaquete
-# completo en el disco.
+# Firmware de la ISO (y, al copiar el live, del disco sin red).
+# GPU moderna: AMD, AMDGPU, Radeon, Intel y NVIDIA (GSP de Turing y posteriores).
+# Con red, el instalador añade el metapaquete linux-firmware (el resto).
 linux-firmware-whence
 linux-firmware-amd
 linux-firmware-amdgpu
 linux-firmware-radeon
 linux-firmware-intel
+linux-firmware-nvidia
 linux-firmware-realtek
 linux-firmware-broadcom
 sof-firmware
@@ -56,6 +57,11 @@ wpa_supplicant
 
 plasma-desktop
 plasma-workspace
+kinfocenter
+vulkan-tools
+wayland-utils
+clinfo
+aha
 sddm
 sddm-kcm
 kscreen
@@ -130,11 +136,11 @@ fastfetch
 noto-fonts
 ttf-liberation
 ttf-dejavu
+plymouth
 
-# Internet. Chrome, DXVK, PlayOnLinux y FooBillard++ salen del repo local.
+# Internet. Firefox es el navegador por defecto. Chrome no se redistribuye.
 falkon
 ktorrent
-google-chrome
 
 # Vídeo
 obs-studio

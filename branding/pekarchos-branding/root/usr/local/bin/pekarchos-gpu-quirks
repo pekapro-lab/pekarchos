@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+# En nouveau, Chromium y Chrome salen en blanco si usan la GPU.
+# Solo en ese caso se escribe un bloque marcado. En cualquier otro
+# controlador se quita ese bloque y se dejan las opciones del usuario.
+# No se fuerza ozone-platform=wayland: eso impide arrancar en X11
+# (XFCE, Cinnamon). La pista auto elige Wayland o X11 según la sesión.
+set -euo pipefail
+
+nouveau=0
+if [[ -d /sys/module/nouveau ]]; then
+	for enlace in /sys/class/drm/card*/device/driver; do
+		[[ -L "${enlace}" ]] || continue
+		if [[ "$(basename "$(readlink -f "${enlace}")")" == "nouveau" ]]; then
+			nouveau=1
+			break
+		fi
+	done
+fi
+
+bloque() {
+	cat <<'EOF'
+# pekarchos-auto
+--disable-gpu
+--ozone-platform-hint=auto
+# pekarchos-auto-end
+EOF
+}
+
+escribir() {
+	local archivo="$1"
+	local tmp
+	tmp=$(mktemp)
+	if [[ -f "${archivo}" ]]; then
+		awk '
+			$0 == "# pekarchos-auto" { saltar = 1; next }
+			$0 == "# pekarchos-auto-end" { saltar = 0; next }
+			saltar { next }
+			{ print }
+		' "${archivo}" >"${tmp}"
+	else
+		: >"${tmp}"
+	fi
+	if [[ "${nouveau}" -eq 1 ]]; then
+		mkdir -p "$(dirname "${archivo}")"
+		if [[ -s "${tmp}" ]] && [[ -n "$(tail -c1 "${tmp}" || true)" ]]; then
+			printf '\n' >>"${tmp}"
+		fi
+		bloque >>"${tmp}"
+		mv "${tmp}" "${archivo}"
+		return 0
+	fi
+	if [[ -f "${archivo}" ]]; then
+		if grep -q '[^[:space:]]' "${tmp}"; then
+			mv "${tmp}" "${archivo}"
+		else
+			rm -f "${archivo}" "${tmp}"
+		fi
+	else
+		rm -f "${tmp}"
+	fi
+}
+
+escribir "${HOME}/.config/chrome-flags.conf"
+escribir "${HOME}/.config/chromium-flags.conf"
+escribir "${HOME}/.var/app/com.google.Chrome/config/chrome-flags.conf"
+escribir "${HOME}/.var/app/org.chromium.Chromium/config/chromium-flags.conf"

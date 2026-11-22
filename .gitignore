@@ -10,3 +10,5 @@ work/
 *.files.tar.gz
 pkg/
 src/
+__pycache__/
+*.pyc

@@ -25,12 +25,22 @@ Rectangle {
         opacity: 0.28
     }
 
+    Image {
+        anchors.horizontalCenter: parent.horizontalCenter
+        y: parent.height * 0.035
+        source: "/usr/share/pekarchos/logo.png"
+        width: 120
+        height: 120
+        fillMode: Image.PreserveAspectFit
+        asynchronous: false
+    }
+
     Text {
         anchors.horizontalCenter: parent.horizontalCenter
-        y: parent.height * 0.08
+        y: parent.height * 0.035 + 124
         text: "PekarchOS"
         color: "#00f0ff"
-        font.pixelSize: 64
+        font.pixelSize: 42
         font.bold: true
     }
 
@@ -120,7 +130,7 @@ Rectangle {
             height: 36
             model: sessionModel
             index: sessionModel.lastIndex
-            arrowIcon: "/usr/share/pekarchos/logo.png"
+            arrowIcon: "/usr/share/icons/hicolor/48x48/apps/pekarchos.png"
         }
     }
 }

@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Plasma fía el lanzador si es ejecutable. Thunar y Nemo miran metadatos
+# de gvfs, que solo existen con la sesión ya abierta.
+set -euo pipefail
+
+dir=""
+if command -v xdg-user-dir >/dev/null 2>&1; then
+	dir=$(xdg-user-dir DESKTOP 2>/dev/null || true)
+fi
+if [[ -z "${dir}" || "${dir}" == "${HOME}" || ! -d "${dir}" ]]; then
+	if [[ -d "${HOME}/Escritorio" ]]; then
+		dir="${HOME}/Escritorio"
+	elif [[ -d "${HOME}/Desktop" ]]; then
+		dir="${HOME}/Desktop"
+	else
+		exit 0
+	fi
+fi
+
+shopt -s nullglob
+for archivo in "${dir}"/*.desktop; do
+	chmod u+x "${archivo}" || true
+	if command -v gio >/dev/null 2>&1; then
+		suma=$(sha256sum "${archivo}" | awk '{print $1}')
+		gio set -t string "${archivo}" metadata::xfce-exe-checksum "${suma}" 2>/dev/null || true
+		gio set "${archivo}" metadata::trusted true 2>/dev/null || true
+	fi
+done

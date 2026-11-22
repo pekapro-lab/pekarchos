@@ -4,23 +4,49 @@ on:
   workflow_dispatch:
   pull_request:
   push:
-    branches:
-      - main
     tags:
       - "v*"
 
 permissions:
-  contents: write
-  actions: write
+  contents: read
 
 concurrency:
   group: pekarchos-iso-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  comprobar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Obtener el código
+        uses: actions/checkout@v4
+
+      - name: Instalar shellcheck
+        run: sudo apt-get update && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y shellcheck
+
+      - name: Comprobar versión, menú, marca y scripts
+        run: bash scripts/check.sh
+
+  probar-instalador:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Obtener el código
+        uses: actions/checkout@v4
+
+      - name: Probar GRUB y el usuario en QEMU
+        run: bash scripts/test-install-qemu.sh
+
   iso:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+    needs:
+      - comprobar
+      - probar-instalador
     runs-on: ubuntu-latest
     timeout-minutes: 300
+    permissions:
+      contents: write
     steps:
       - name: Obtener el código
         uses: actions/checkout@v4
@@ -33,7 +59,6 @@ jobs:
             /usr/local/lib/android \
             /opt/ghc \
             /opt/hostedtoolcache \
-            /usr/local/share/boost \
             /usr/share/swift \
             /usr/local/.ghcup \
             /usr/share/miniconda \
@@ -53,9 +78,6 @@ jobs:
           sudo apt-get clean || true
           sudo docker image prune -af || true
           df -h
-          # La raíz sin comprimir de una ISO de ~4 GiB más la caché de pacman
-          # necesitan el hueco que deja este paso. El disco del runner es el
-          # mismo para el contenedor.
 
       - name: Construir la ISO
         run: |
@@ -70,35 +92,49 @@ jobs:
           ls -lh out
           df -h
 
-      - name: Subir el artefacto
-        id: subir-iso
-        continue-on-error: true
-        uses: actions/upload-artifact@v4
-        with:
-          name: pekarchos-iso
-          path: |
-            out/*.iso
-            out/*.iso.part*
-            out/SHA256SUMS
-          if-no-files-found: error
-          retention-days: 14
-          compression-level: 0
-
-      - name: Confirmar que la ISO existe
+      - name: Comprobar SHA256SUMS
         run: |
           set -euo pipefail
           iso=$(echo out/*.iso)
-          test -f "${iso}"
+          base=$(basename "${iso}")
           test -f out/SHA256SUMS
-          # La suma se escribió dentro del contenedor, con la ruta /out/.
-          expected=$(awk '{print $1; exit}' out/SHA256SUMS)
-          actual=$(sha256sum "${iso}" | awk '{print $1}')
+          # El campo del nombre no lleva directorio.
+          if awk '{ print $2 }' out/SHA256SUMS | grep -q '/'; then
+            echo "SHA256SUMS contiene una ruta. Tiene que ser el nombre del archivo." >&2
+            cat out/SHA256SUMS >&2
+            exit 1
+          fi
+          expected=$(awk -v nombre="${base}" '$2 == nombre { print $1; exit }' out/SHA256SUMS)
+          actual=$(sha256sum "${iso}" | awk '{ print $1 }')
+          test -n "${expected}"
           test "${expected}" = "${actual}"
-          ls -lh "${iso}" out/SHA256SUMS
           echo "SHA256 ${actual}"
-          if [[ "${{ steps.subir-iso.outcome }}" != "success" ]]; then
-            echo "La ISO está construida y la suma coincide, pero GitHub no ha guardado el artefacto."
-            echo "El fallo habitual es la cuota de almacenamiento de Actions. No hay pekarchos-iso en esta ejecución."
+
+      - name: Partir la ISO si no cabe en un asset
+        id: partir
+        run: |
+          set -euo pipefail
+          iso=$(echo out/*.iso)
+          base=$(basename "${iso}")
+          # Por debajo de 2 GiB. 1900 MiB deja margen bajo el tope de GitHub.
+          max=$((2 * 1024 * 1024 * 1024 - 1024 * 1024))
+          size=$(stat -c%s "${iso}")
+          if (( size >= max )); then
+            echo "La ISO ocupa ${size} bytes; se parte."
+            split -b 1900M -d --additional-suffix=.bin "${iso}" "out/${base}.part"
+            (
+              cd out
+              sha256sum ./*.part*.bin | sed 's| \./| |' >> SHA256SUMS
+            )
+            echo "partida=si" >> "${GITHUB_OUTPUT}"
+          else
+            echo "partida=no" >> "${GITHUB_OUTPUT}"
+          fi
+          echo "---- SHA256SUMS ----"
+          cat out/SHA256SUMS
+          if awk '{ print $2 }' out/SHA256SUMS | grep -q '/'; then
+            echo "SHA256SUMS volvió a llevar una ruta." >&2
+            exit 1
           fi
 
       - name: Publicar en la release
@@ -109,38 +145,28 @@ jobs:
           set -euo pipefail
           tag="${GITHUB_REF_NAME}"
           iso=$(echo out/*.iso)
-          notes="${RUNNER_TEMP}/notas.md"
-          name="$(basename "${iso}")"
-          {
-            echo "ISO de PekarchOS construida desde ${GITHUB_SHA}."
-            echo
-            echo "El repositorio es privado. Esta release solo la ve quien tiene acceso."
-            echo
-            echo "Usuario del medio en vivo: live / live (entra solo al escritorio Plasma)."
-            echo "Antes de instalar, haz una copia de seguridad."
-            echo
-            echo "Comprueba la descarga con SHA256SUMS."
-            echo
-            echo "La ISO completa es el artefacto de Actions (pekarchos-iso), pensado para subir a Google Drive."
-            echo "GitHub no admite un asset de release mayor de 2 GiB. Si la ISO lo supera, esta release adjunta partes de 1900 MiB y SHA256SUMS."
-            echo "Para unirlas: cat ${name}.part* > ${name} && sha256sum -c SHA256SUMS"
-          } >"${notes}"
-
-          max=$((2 * 1024 * 1024 * 1024 - 1024 * 1024))
-          size=$(stat -c%s "${iso}")
-          assets=("${iso}" out/SHA256SUMS)
-          if (( size >= max )); then
-            echo "La ISO ocupa ${size} bytes; se parte para el límite de 2 GiB de las releases."
-            split -b 1900M -d --additional-suffix=.bin "${iso}" "out/$(basename "${iso}").part"
-            assets=()
+          base=$(basename "${iso}")
+          notes="${GITHUB_WORKSPACE}/RELEASE_NOTES.md"
+          if [[ ! -f "${notes}" ]]; then
+            echo "Falta RELEASE_NOTES.md. No se publica una release sin notas." >&2
+            exit 1
+          fi
+          assets=()
+          if [[ "${{ steps.partir.outputs.partida }}" == "si" ]]; then
             for part in out/*.part*.bin; do
               assets+=("${part}")
             done
-            assets+=(out/SHA256SUMS)
+          else
+            assets+=("${iso}")
+          fi
+          assets+=(out/SHA256SUMS)
+          if [[ -f out/AUR-OMITIDOS.txt ]]; then
+            assets+=(out/AUR-OMITIDOS.txt)
           fi
 
           if gh release view "${tag}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
             gh release upload "${tag}" --repo "${GITHUB_REPOSITORY}" --clobber "${assets[@]}"
+            gh release edit "${tag}" --repo "${GITHUB_REPOSITORY}" --notes-file "${notes}"
           else
             gh release create "${tag}" \
               --repo "${GITHUB_REPOSITORY}" \
@@ -148,13 +174,28 @@ jobs:
               --notes-file "${notes}" \
               "${assets[@]}"
           fi
+          echo "Release ${tag} publicada. ISO: ${base}"
 
-  probar-instalador:
-    runs-on: ubuntu-latest
-    timeout-minutes: 120
-    steps:
-      - name: Obtener el código
-        uses: actions/checkout@v4
-
-      - name: Probar GRUB y el usuario en QEMU
-        run: bash scripts/test-install-qemu.sh
+      - name: Subir la ISO entera a SourceForge si hay secretos
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          SOURCEFORGE_USER: ${{ secrets.SOURCEFORGE_USER }}
+          SOURCEFORGE_SSH_KEY: ${{ secrets.SOURCEFORGE_SSH_KEY }}
+          SOURCEFORGE_PROJECT: ${{ secrets.SOURCEFORGE_PROJECT }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${SOURCEFORGE_USER}" || -z "${SOURCEFORGE_SSH_KEY}" || -z "${SOURCEFORGE_PROJECT}" ]]; then
+            echo "SourceForge no está configurado. Hacen falta los secretos SOURCEFORGE_USER, SOURCEFORGE_SSH_KEY y SOURCEFORGE_PROJECT. Se omite."
+            exit 0
+          fi
+          install -d -m 0700 "${HOME}/.ssh"
+          printf '%s\n' "${SOURCEFORGE_SSH_KEY}" > "${HOME}/.ssh/sf_key"
+          chmod 600 "${HOME}/.ssh/sf_key"
+          ssh-keyscan -H frs.sourceforge.net >> "${HOME}/.ssh/known_hosts"
+          destino="${SOURCEFORGE_USER}@frs.sourceforge.net:/home/frs/project/${SOURCEFORGE_PROJECT}/${GITHUB_REF_NAME}/"
+          ssh -i "${HOME}/.ssh/sf_key" -o StrictHostKeyChecking=yes \
+            "${SOURCEFORGE_USER}@frs.sourceforge.net" \
+            "mkdir -p /home/frs/project/${SOURCEFORGE_PROJECT}/${GITHUB_REF_NAME}"
+          rsync -a -e "ssh -i ${HOME}/.ssh/sf_key -o StrictHostKeyChecking=yes" \
+            out/*.iso out/SHA256SUMS "${destino}"
+          echo "ISO subida a SourceForge (${SOURCEFORGE_PROJECT})."

@@ -9,11 +9,13 @@ fi
 
 enable_multilib=0
 enable_flathub=0
+enable_chrome=0
 packages=()
 while [[ $# -gt 0 ]]; do
 	case "$1" in
 	--enable-multilib) enable_multilib=1 ;;
 	--flathub) enable_flathub=1 ;;
+	--chrome) enable_chrome=1 ;;
 	--)
 		shift
 		packages+=("$@")
@@ -67,11 +69,39 @@ else
 	echo "No hay paquetes oficiales nuevos que instalar."
 fi
 
-if [[ "${enable_flathub}" -eq 1 ]]; then
+quiere_docker=0
+for pkg in "${packages[@]}"; do
+	if [[ "${pkg}" == "docker" ]]; then
+		quiere_docker=1
+	fi
+done
+if [[ "${quiere_docker}" -eq 1 ]] && pacman -Q docker >/dev/null 2>&1; then
+	echo "==> Activando Docker"
+	if ! systemctl enable --now docker.service; then
+		systemctl enable docker.service || true
+		echo "Docker quedó habilitado. Si no arrancó, usa: sudo systemctl start docker"
+	fi
+	uid="${PKEXEC_UID:-${SUDO_UID:-}}"
+	if [[ -n "${uid}" ]]; then
+		cuenta=$(id -nu "${uid}" 2>/dev/null || true)
+		if [[ -n "${cuenta}" ]]; then
+			usermod -aG docker "${cuenta}"
+			echo "Se añadió ${cuenta} al grupo docker. Cierra la sesión para que valga."
+		fi
+	fi
+fi
+
+if [[ "${enable_flathub}" -eq 1 || "${enable_chrome}" -eq 1 ]]; then
 	echo "==> Flatpak y Flathub"
 	pacman -S --needed --noconfirm flatpak
-	flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+	flatpak remote-add --if-not-exists --system flathub https://dl.flathub.org/repo/flathub.flatpakrepo
 	echo "Remoto Flathub listo."
+fi
+
+if [[ "${enable_chrome}" -eq 1 ]]; then
+	echo "==> Google Chrome desde Flathub (no va dentro de la ISO)"
+	flatpak install -y --noninteractive --system flathub com.google.Chrome
+	echo "Chrome instalado. Firefox sigue siendo el navegador por defecto."
 fi
 
 echo "==> Hecho"

@@ -1,0 +1,130 @@
+#!/usr/bin/env bash
+# Comprobaciones ligeras: versión única, menú de la ISO, marca y sintaxis.
+# No construye la ISO.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "${ROOT}"
+
+fallo() {
+	echo "ERROR: $*" >&2
+	exit 1
+}
+
+ver="$(tr -d '[:space:]' < VERSION)"
+[[ "${ver}" == "0.3.0" ]] || fallo "VERSION es «${ver}» y esta fase es 0.3.0."
+
+grep -q '@PEKARCHOS_VERSION@' branding/pekarchos-branding/root/usr/share/pekarchos/os-release \
+	|| fallo "os-release no toma la versión de VERSION."
+grep -q 'LOGO=pekarchos' branding/pekarchos-branding/root/usr/share/pekarchos/os-release
+grep -q '@PEKARCHOS_VERSION@' branding/pekarchos-branding/root/etc/xdg/kcm-about-distrorc
+grep -q 'LogoPath=/usr/share/pekarchos/logo-full.png' branding/pekarchos-branding/root/etc/xdg/kcm-about-distrorc
+
+(
+	# shellcheck disable=SC1091
+	source branding/pekarchos-branding/PKGBUILD
+	[[ "${pkgver}" == "${ver}" ]] || fallo "El PKGBUILD resolvió ${pkgver}."
+)
+
+PEKARCHOS_VERSION="${ver}" bash -c '
+	declare -A file_permissions
+	# shellcheck disable=SC1091
+	source archiso/profiledef.sh
+	[[ "${iso_version}" == "0.3.0" ]]
+	[[ " ${bootmodes[*]} " == *" uefi.grub "* ]]
+	[[ " ${bootmodes[*]} " == *" bios.syslinux "* ]]
+	[[ "${kernel_params_x86_64}" != *ttyS0* ]]
+' || fallo "profiledef.sh no lee la versión o el modo de arranque."
+
+paquetes=archiso/packages.x86_64
+for necesario in kinfocenter vulkan-tools wayland-utils clinfo aha plymouth \
+	linux-firmware-nvidia linux-firmware-amd linux-firmware-amdgpu firefox; do
+	grep -qx "${necesario}" "${paquetes}" || fallo "Falta ${necesario} en la ISO."
+done
+if grep -qx 'google-chrome' "${paquetes}"; then
+	fallo "google-chrome no puede ir en la ISO."
+fi
+if grep -q 'try_aur google-chrome' scripts/build-iso.sh; then
+	fallo "La construcción sigue empaquetando Chrome."
+fi
+if grep -R -I -n --exclude=check.sh -- '--ozone-platform=wayland' branding archiso scripts tools .github; then
+	fallo "Hay un --ozone-platform=wayland fijo. En X11 Chrome no arranca."
+fi
+
+for menu in archiso/grub/grub.cfg archiso/grub/loopback.cfg archiso/syslinux/archiso_sys-linux.cfg; do
+	grep -q 'nomodeset' "${menu}" || fallo "${menu} no tiene gráficos seguros."
+	grep -q 'processor.max_cstate=5' "${menu}" || fallo "${menu} no tiene el límite de C-state."
+	grep -q 'usbcore.autosuspend=-1' "${menu}" || fallo "${menu} no tiene el ajuste de USB."
+	grep -q 'pcie_aspm=off' "${menu}" || fallo "${menu} no tiene pcie_aspm=off."
+done
+grep -q 'gráficos seguros' archiso/grub/grub.cfg
+grep -q 'graficos seguros' archiso/syslinux/archiso_sys-linux.cfg
+
+test -f branding/pekarchos-branding/root/usr/share/icons/hicolor/48x48/apps/pekarchos.png
+test -f branding/pekarchos-branding/root/usr/share/icons/hicolor/scalable/apps/pekarchos.svg
+test -f branding/pekarchos-branding/root/usr/share/pekarchos/logo-full.png
+test -f branding/pekarchos-branding/root/usr/share/pekarchos/logo.png
+test -f branding/pekarchos-branding/root/usr/share/plymouth/themes/pekarchos/pekarchos.script
+test -f branding/pekarchos-branding/root/usr/share/grub/themes/pekarchos/theme.txt
+test -f branding/pekarchos-branding/root/etc/skel/.face.icon
+grep -q 'install -m 0755' branding/pekarchos-branding/root/usr/lib/pekarchos/colocar-lanzadores.sh
+grep -q 'Icon=pekarchos' branding/pekarchos-branding/root/usr/share/applications/pekarchos-welcome.desktop
+grep -q 'CC BY-SA 4.0' LICENSE-ARTWORK
+grep -q 'CC BY-SA 4.0' THIRD-PARTY.md
+python3 -c 'import json; json.load(open("branding/pekarchos-branding/root/usr/share/pekarchos/archinstall.json"))'
+
+if grep -q 'upload-artifact' .github/workflows/build-iso.yml; then
+	fallo "El flujo todavía sube la ISO como artefacto."
+fi
+if grep -q 'branches:' .github/workflows/build-iso.yml; then
+	fallo "El flujo no debe construir en cada push a una rama."
+fi
+
+tmp=$(mktemp -d)
+printf 'x\n' >"${tmp}/pekarchos-0.3.0-x86_64.iso"
+(
+	cd "${tmp}"
+	sha256sum ./*.iso | sed 's| \./| |' > SHA256SUMS
+)
+grep -q 'pekarchos-0.3.0-x86_64.iso$' "${tmp}/SHA256SUMS"
+if grep -q '/' "${tmp}/SHA256SUMS"; then
+	fallo "La suma de prueba de ejemplo lleva una ruta."
+fi
+rm -rf "${tmp}"
+
+scripts=(
+	scripts/build-iso.sh
+	scripts/check.sh
+	scripts/test-install-qemu.sh
+	archiso/profiledef.sh
+	archiso/airootfs/root/customize_airootfs.sh
+	archiso/airootfs/usr/local/bin/pekarchos-export-branding
+	branding/pekarchos-branding/root/usr/lib/pekarchos/install-chroot.sh
+	branding/pekarchos-branding/root/usr/lib/pekarchos/colocar-lanzadores.sh
+	branding/pekarchos-branding/root/usr/lib/pekarchos/poner-avatar.sh
+	branding/pekarchos-branding/root/usr/local/bin/pekarchos-install
+	branding/pekarchos-branding/root/usr/local/bin/pekarchos-install-archinstall
+	branding/pekarchos-branding/root/usr/local/bin/pekarchos-welcome-install
+	branding/pekarchos-branding/root/usr/local/bin/pekarchos-gpu-quirks
+	branding/pekarchos-branding/root/usr/local/bin/pekarchos-trust-launchers
+	branding/pekarchos-branding/root/usr/local/bin/pekarchos-apply-look
+	branding/pekarchos-branding/root/usr/local/bin/pekarchos-sddm-xsetup
+	branding/pekarchos-branding/root/usr/share/pekarchos/postinstall.sh
+)
+for script in "${scripts[@]}"; do
+	bash -n "${script}"
+done
+
+if command -v shellcheck >/dev/null 2>&1; then
+	# info: avisos previos (comillas a propósito, printf -v). warning y error sí paran.
+	shellcheck -S warning -x "${scripts[@]}"
+else
+	echo "shellcheck no está instalado; solo se hizo bash -n."
+fi
+
+python3 -m py_compile \
+	tools/generate_assets.py \
+	tools/make_logo_icons.py \
+	branding/pekarchos-branding/root/usr/local/bin/pekarchos-welcome
+
+echo "Comprobaciones ligeras correctas (versión ${ver})."
