@@ -195,9 +195,7 @@ jobs:
           chmod 600 "${HOME}/.ssh/sf_key"
           ssh-keyscan -H frs.sourceforge.net >> "${HOME}/.ssh/known_hosts"
           destino="${SOURCEFORGE_USER}@frs.sourceforge.net:/home/frs/project/${SOURCEFORGE_PROJECT}/${GITHUB_REF_NAME}/"
-          ssh -i "${HOME}/.ssh/sf_key" -o StrictHostKeyChecking=yes \
-            "${SOURCEFORGE_USER}@frs.sourceforge.net" \
-            "mkdir -p /home/frs/project/${SOURCEFORGE_PROJECT}/${GITHUB_REF_NAME}"
+          # frs.sourceforge.net solo deja copiar archivos: rsync crea la carpeta de la versión.
           rsync -a -e "ssh -i ${HOME}/.ssh/sf_key -o StrictHostKeyChecking=yes" \
             out/*.iso out/SHA256SUMS "${destino}"
           echo "ISO subida a SourceForge (${SOURCEFORGE_PROJECT})."
