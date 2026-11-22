@@ -38,7 +38,8 @@ PEKARCHOS_VERSION="${ver}" bash -c '
 
 paquetes=archiso/packages.x86_64
 for necesario in kinfocenter vulkan-tools wayland-utils clinfo aha plymouth \
-	linux-firmware-nvidia linux-firmware-amd linux-firmware-amdgpu firefox; do
+	linux-firmware-nvidia linux-firmware-amd linux-firmware-amdgpu firefox \
+	calamares-git ckbcomp; do
 	grep -qx "${necesario}" "${paquetes}" || fallo "Falta ${necesario} en la ISO."
 done
 if grep -qx 'google-chrome' "${paquetes}"; then
@@ -69,6 +70,36 @@ test -f branding/pekarchos-branding/root/usr/share/grub/themes/pekarchos/theme.t
 test -f branding/pekarchos-branding/root/etc/skel/.face.icon
 grep -q 'install -m 0755' branding/pekarchos-branding/root/usr/lib/pekarchos/colocar-lanzadores.sh
 grep -q 'Icon=pekarchos' branding/pekarchos-branding/root/usr/share/applications/pekarchos-welcome.desktop
+grep -q 'unpackfs' branding/pekarchos-branding/root/etc/calamares/settings.conf
+grep -q 'netinstall@escritorios' branding/pekarchos-branding/root/etc/calamares/settings.conf
+grep -q 'netinstall@gpu' branding/pekarchos-branding/root/etc/calamares/settings.conf
+grep -q 'immutable: true' branding/pekarchos-branding/root/etc/calamares/modules/netinstall_gpu.conf
+grep -q 'nvidia-open' branding/pekarchos-branding/root/etc/calamares/modules/netinstall_gpu.conf
+if grep -R -n -E 'pacman .*390|nvidia-390xx-dkms' branding/pekarchos-branding/root/etc/calamares >/dev/null; then
+	fallo "Calamares no puede instalar el controlador 390 en esta fase."
+fi
+if grep -n 'pacman ' branding/pekarchos-branding/root/usr/lib/pekarchos/gpu-390-hook.sh >/dev/null; then
+	fallo "El gancho de NVIDIA 390 no puede llamar a pacman todavía."
+fi
+python3 - <<'PY'
+import re
+from pathlib import Path
+root = Path("branding/pekarchos-branding/root/etc/calamares")
+text = (root / "settings.conf").read_text()
+names = re.findall(r"^\s+- ([a-z0-9]+(?:@[a-z0-9]+)?)\s*$", text, re.M)
+missing = []
+for name in names:
+    base, _, inst = name.partition("@")
+    conf = root / "modules" / (f"{base}_{inst}.conf" if inst else f"{base}.conf")
+    if not conf.is_file():
+        missing.append(str(conf))
+if missing:
+    raise SystemExit("Faltan configuraciones de Calamares: " + ", ".join(missing))
+PY
+grep -q 'aur_build_required calamares-git' scripts/build-iso.sh
+grep -q 'd62849a39a97dbcd4bd9389ebc38e9643a81fa86' scripts/build-iso.sh
+test -f branding/pins/calamares-git.commit
+test -f branding/pins/ckbcomp.commit
 grep -q 'CC BY-SA 4.0' LICENSE-ARTWORK
 grep -q 'CC BY-SA 4.0' THIRD-PARTY.md
 python3 -c 'import json; json.load(open("branding/pekarchos-branding/root/usr/share/pekarchos/archinstall.json"))'
@@ -100,8 +131,13 @@ scripts=(
 	archiso/airootfs/root/customize_airootfs.sh
 	archiso/airootfs/usr/local/bin/pekarchos-export-branding
 	branding/pekarchos-branding/root/usr/lib/pekarchos/install-chroot.sh
+	branding/pekarchos-branding/root/usr/lib/pekarchos/comun.sh
 	branding/pekarchos-branding/root/usr/lib/pekarchos/colocar-lanzadores.sh
 	branding/pekarchos-branding/root/usr/lib/pekarchos/poner-avatar.sh
+	branding/pekarchos-branding/root/usr/lib/pekarchos/calamares-limpiar.sh
+	branding/pekarchos-branding/root/usr/lib/pekarchos/gpu-390-hook.sh
+	branding/pekarchos-branding/root/usr/lib/pekarchos/instalar-firmware.sh
+	branding/pekarchos-branding/root/usr/local/bin/pekarchos-calamares
 	branding/pekarchos-branding/root/usr/local/bin/pekarchos-install
 	branding/pekarchos-branding/root/usr/local/bin/pekarchos-install-archinstall
 	branding/pekarchos-branding/root/usr/local/bin/pekarchos-welcome-install

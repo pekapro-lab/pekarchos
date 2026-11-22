@@ -348,6 +348,9 @@ class Welcome(QWidget):
         self.startup.toggled.connect(save_show_on_start)
         actions.addWidget(self.startup)
         actions.addStretch(1)
+        self.calamares_button = QPushButton("Instalar con Calamares")
+        self.calamares_button.clicked.connect(self.open_calamares)
+        actions.addWidget(self.calamares_button)
         self.install_button = QPushButton("Instalar selección")
         self.install_button.clicked.connect(self.install_selected)
         actions.addWidget(self.install_button)
@@ -366,6 +369,13 @@ class Welcome(QWidget):
             f"RAM: {ram_summary()}\n"
             f"GPU: {gpu_summary()}"
         )
+
+    def open_calamares(self) -> None:
+        wrapper = Path("/usr/local/bin/pekarchos-calamares")
+        if not wrapper.is_file():
+            self.log.setPlainText("No está el instalador gráfico.")
+            return
+        subprocess.Popen([str(wrapper)])
 
     def install_selected(self) -> None:
         if self.proc.state() != QProcess.ProcessState.NotRunning:
