@@ -15,7 +15,7 @@ fi
 
 hogar=$(getent passwd "${usuario}" | cut -d: -f6)
 origen=""
-for candidato in /usr/share/pekarchos/logo.png /etc/skel/.face.icon /usr/share/sddm/faces/.face.icon; do
+for candidato in /usr/share/pekarchos/face.icon /usr/share/pekarchos/logo.png /etc/skel/.face.icon /usr/share/sddm/faces/.face.icon; do
 	if [[ -f "${candidato}" ]]; then
 		origen="${candidato}"
 		break
