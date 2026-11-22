@@ -5,6 +5,7 @@ con KDE Plasma 6 en Wayland, en español.
 
 ## Novedades
 
+- Instalador gráfico Calamares, además del instalador de terminal. Copia el sistema en vivo y deja elegir escritorios extra y el controlador de gráfica.
 - Firefox es el navegador por defecto. Google Chrome ya no va dentro de la ISO: se ofrece desde la bienvenida, por Flathub.
 - Logotipo nuevo (Peka / Pekapro, CC BY-SA 4.0) en los iconos, la bienvenida, el avatar, Acerca de KDE, Plymouth y GRUB.
 - Animación de arranque Plymouth y tema de GRUB, en la ISO y en el sistema instalado.
@@ -60,14 +61,16 @@ El número de partes puede cambiar. Únelas en orden (`part00`, `part01`, …).
 
 ## Instalación
 
-En el escritorio, «Instalar PekarchOS». Copia este sistema al disco y no necesita internet. Escribe `BORRAR` y después `INSTALAR`. Para convivir con Windows, elige una partición ya creada: en UEFI no se formatea la partición EFI.
+En el escritorio, «Instalar PekarchOS (gráfico)» abre Calamares. También se abre desde la bienvenida con «Instalar con Calamares».
+
+«Instalar PekarchOS» es el instalador de terminal. Copia este sistema al disco y no necesita internet. Escribe `BORRAR` y después `INSTALAR`. Para convivir con Windows, elige una partición ya creada: en UEFI no se formatea la partición EFI.
 
 `sudo pekarchos-install --archinstall` es la alternativa con red: instala con archinstall usando el perfil de PekarchOS.
 
 ## Problemas conocidos
 
 - NVIDIA Fermi (serie 390, por ejemplo una GTX 570) no tiene controlador en esta versión. Nouveau en Wayland puede dejar Chromium en blanco: al entrar, si el controlador es nouveau, se añade `--disable-gpu` y la pista de plataforma `auto`. No se fuerza Wayland, para no romper XFCE ni Cinnamon.
-- En algunas placas Ryzen de primera generación (se vio en una MSI MS-7A33 con un 1700X) el live se quedó congelado y murieron ratón y teclado. Prueba la entrada «compatibilidad Ryzen/USB» y, si sigue, un puerto USB 2.0 trasero. «Gráficos seguros» descarta la gráfica.
-- Plymouth con nouveau antiguo puede dejar la pantalla negra un momento. La entrada de gráficos seguros arranca sin la animación.
+- En algunas placas Ryzen de primera generación (se vio en una MSI MS-7A33 con un 1700X) la entrada por defecto se queda en pantalla negra o gris, o el live se congela y mueren ratón y teclado. Prueba la entrada «compatibilidad Ryzen/USB» y, si sigue, un puerto USB 2.0 trasero. «Gráficos seguros» descarta la gráfica.
+- Plymouth con nouveau antiguo puede no mostrar el logo o dejar la pantalla negra un momento. La entrada de gráficos seguros arranca sin la animación.
 - No hay sesión X11 de Plasma en los repos actuales de Arch.
-- Calamares, el repositorio propio `[pekarchos]` y el controlador `nvidia-390xx` no entran en esta versión.
+- El repositorio propio `[pekarchos]` no entra en esta versión. El controlador `nvidia-390xx` no se incluirá.
