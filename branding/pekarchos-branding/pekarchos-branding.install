@@ -36,6 +36,14 @@ EOF
 		done
 	fi
 
+	# sddm y plymouth poseen estos archivos: se copian aquí en vez de empaquetarlos.
+	if [ -f /usr/share/pekarchos/face.icon ]; then
+		install -Dm644 /usr/share/pekarchos/face.icon /usr/share/sddm/faces/.face.icon
+	fi
+	if [ -f /usr/share/pekarchos/plymouthd.conf ]; then
+		install -Dm644 /usr/share/pekarchos/plymouthd.conf /etc/plymouth/plymouthd.conf
+	fi
+
 	if command -v plymouth-set-default-theme >/dev/null 2>&1; then
 		plymouth-set-default-theme -R pekarchos || true
 	fi

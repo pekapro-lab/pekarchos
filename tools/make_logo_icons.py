@@ -267,7 +267,7 @@ def main() -> None:
     emblem_svg(BRAND / "logo.png", HICOLOR / "scalable" / "apps" / "pekarchos.svg")
 
     face = emblem.resize((256, 256), Image.Resampling.LANCZOS)
-    save_png(face, SDDM / "faces" / ".face.icon")
+    save_png(face, BRAND / "face.icon")
     save_png(face, SKEL / ".face.icon")
 
     splash = navy_canvas(640, 480)
