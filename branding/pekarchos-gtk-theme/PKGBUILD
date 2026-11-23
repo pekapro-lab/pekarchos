@@ -1,0 +1,16 @@
+# Maintainer: Peka Producciones <pekarchos@pekapro.dev>
+pkgname=pekarchos-gtk-theme
+pkgver=1.0
+pkgrel=1
+pkgdesc="Tema GTK neon magenta de PekarchOS"
+arch=('any')
+url="https://github.com/pekapro-lab/pekarchos"
+license=('GPL')
+depends=('gtk3' 'gtk4')
+source=()
+sha256sums=()
+
+package() {
+  install -d "${pkgdir}/usr/share/themes/PekarchOS-Neon"
+  cp -a gtk-3.0 gtk-4.0 index.theme "${pkgdir}/usr/share/themes/PekarchOS-Neon/"
+}
