@@ -44,6 +44,12 @@ if command -v apparmor_parser >/dev/null 2>&1; then
   echo "    AppArmor activado"
 fi
 
+# --- Actualizaciones automáticas ---
+if [[ -f /usr/lib/systemd/system/pekarchos-update.timer ]]; then
+  systemctl enable pekarchos-update.timer || true
+  echo "    Actualizaciones automáticas diarias activadas"
+fi
+
 # --- Locale y teclado (refuerzo) ---
 if ! grep -q '^es_ES.UTF-8 UTF-8' /etc/locale.gen 2>/dev/null; then
   echo "es_ES.UTF-8 UTF-8" >> /etc/locale.gen
