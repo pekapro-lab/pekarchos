@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=X-GNOME-Metatheme
+Name=PekarchOS Neon Magenta
+Comment=Tema oscuro neon magenta de PekarchOS
+Encoding=UTF-8
+
+[X-GNOME-Metatheme]
+GtkTheme=PekarchOS-Neon
+IconTheme=candy-icons
+CursorTheme=breeze_cursors
+ButtonLayout=close,minimize,maximize:menu
