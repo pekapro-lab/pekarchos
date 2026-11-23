@@ -1,0 +1,13 @@
+[Unit]
+Description=Actualización automática de PekarchOS
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/pacman -Syu --noconfirm
+Nice=19
+IOSchedulingClass=idle
+
+[Install]
+WantedBy=multi-user.target
