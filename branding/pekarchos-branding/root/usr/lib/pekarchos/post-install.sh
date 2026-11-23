@@ -28,6 +28,22 @@ systemctl enable NetworkManager.service || true
 systemctl enable bluetooth.service || true
 systemctl enable cups.socket || true
 
+# --- Firewall (ufw) ---
+if command -v ufw >/dev/null 2>&1; then
+  ufw --force enable || true
+  ufw default deny incoming || true
+  ufw default allow outgoing || true
+  ufw allow ssh || true
+  systemctl enable ufw.service || true
+  echo "    Firewall ufw activado (denegar entrante, permitir saliente + SSH)"
+fi
+
+# --- AppArmor ---
+if command -v apparmor_parser >/dev/null 2>&1; then
+  systemctl enable apparmor.service || true
+  echo "    AppArmor activado"
+fi
+
 # --- Locale y teclado (refuerzo) ---
 if ! grep -q '^es_ES.UTF-8 UTF-8' /etc/locale.gen 2>/dev/null; then
   echo "es_ES.UTF-8 UTF-8" >> /etc/locale.gen
