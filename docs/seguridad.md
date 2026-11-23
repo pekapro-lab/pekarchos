@@ -11,8 +11,13 @@
 - Paquete `apparmor` incluido.
 - El servicio se activa en la post-instalación.
 
+### Actualizaciones automáticas
+- Timer diario `pekarchos-update.timer` que ejecuta `pacman -Syu --noconfirm`.
+- Se activa automáticamente en la post-instalación.
+- Retraso aleatorio de hasta 1 hora para no sobrecargar los espejos.
+
 ### Kernel
-- Se ofrece `linux-hardened` como opción en el netinstall (recomendado para mayor seguridad).
+- Se ofrece `linux-hardened` como opción recomendada para mayor seguridad.
 
 ### Otras herencias de Arch
 - Mitigaciones de compilador (PIE, RELRO, stack protector, NX, FORTIFY_SOURCE).
@@ -21,12 +26,12 @@
 
 ## Recomendaciones post-instalación
 
-- Mantener el sistema actualizado (`pacman -Syu`).
+- Las actualizaciones automáticas ya están activas.
 - Revisar reglas de ufw si se necesitan más puertos abiertos.
 - Considerar `linux-hardened` si no se usan drivers propietarios problemáticos.
-- Activar actualizaciones automáticas si se desea (por ejemplo con `pacman-contrib` + timer).
 
 ## Archivos relacionados
 
-- `/usr/lib/pekarchos/post-install.sh` — Activa ufw y AppArmor.
+- `/usr/lib/pekarchos/post-install.sh` — Activa ufw, AppArmor y el timer de actualizaciones.
+- `/usr/lib/systemd/system/pekarchos-update.service` y `.timer`
 - `docs/post-install.md` — Detalle del script de post-instalación.
