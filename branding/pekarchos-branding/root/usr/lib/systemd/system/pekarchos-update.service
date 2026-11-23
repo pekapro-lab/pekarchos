@@ -5,7 +5,7 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/pacman -Syu --noconfirm
+ExecStart=/usr/lib/pekarchos/actualizar-y-notificar.sh
 Nice=19
 IOSchedulingClass=idle
 
