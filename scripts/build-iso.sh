@@ -35,7 +35,6 @@ if [[ ! -f /usr/share/grub/unicode.pf2 ]]; then
 	pacman -S --noconfirm --needed grub
 fi
 if [[ -f /etc/makepkg.conf ]] && ! grep -q 'pekarchos-nodebug' /etc/makepkg.conf; then
-	# Sin esto, makepkg deja un paquete -debug enorme (Calamares pasa de 60 MiB).
 	printf '\n# pekarchos-nodebug\nOPTIONS+=(!debug)\n' >>/etc/makepkg.conf
 fi
 if ! command -v python3 >/dev/null; then
@@ -83,6 +82,15 @@ chown -R builder:builder "${src}"
 sudo -u builder bash -c "cd '${src}' && makepkg -s --noconfirm"
 cp "${src}"/pekarchos-branding-*.pkg.tar.zst "${WORK}/repo/"
 
+echo "==> Tema GTK Neon"
+if [[ -d "${ROOT}/branding/pekarchos-gtk-theme" ]]; then
+	theme_src="${WORK}/pkgbuild-gtk"
+	cp -a "${ROOT}/branding/pekarchos-gtk-theme" "${theme_src}"
+	chown -R builder:builder "${theme_src}"
+	sudo -u builder bash -c "cd '${theme_src}' && makepkg -s --noconfirm"
+	cp "${theme_src}"/pekarchos-gtk-theme-*.pkg.tar.zst "${WORK}/repo/" || true
+fi
+
 aur_build() {
 	local name="$1"
 	local pin="$2"
@@ -117,9 +125,6 @@ path.write_text(text)
 PY
 	fi
 	if [[ "${name}" == "foobillard++" ]]; then
-		# El PKGBUILD ya quita inline y freetype-config. GCC actual además
-		# rechaza abs() sobre un float. No se añade otra función prepare():
-		# en bash la segunda sustituye a la primera.
 		python3 - "${tmp}/PKGBUILD" <<'PY'
 import pathlib, sys
 path = pathlib.Path(sys.argv[1])
@@ -240,15 +245,12 @@ mkarchiso -v -r -w "${WORK}/work" -o "${OUT}" "${WORK}/profile"
 
 echo "==> Resultado"
 ls -lh "${OUT}"/*.iso
-# Nombres pelados: sha256sum -c falla si la suma lleva la ruta /out/.
 (
 	cd "${OUT}"
 	sha256sum ./*.iso | sed 's| \./| |' | tee SHA256SUMS
 )
 stat -c '%n %s' "${OUT}"/*.iso
 iso_size="$(stat -c%s "${OUT}"/*.iso)"
-# Tope de seguridad. El objetivo es quedarse cerca de 4 GiB; las releases de
-# GitHub no aceptan un archivo de más de 2 GiB y por eso el workflow las parte.
 iso_limit=$((9 * 1024 * 1024 * 1024 / 2))
 if (( iso_size >= iso_limit )); then
 	echo "La ISO pesa ${iso_size} bytes y el tope de esta construcción es ${iso_limit}." >&2
