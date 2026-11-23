@@ -1,0 +1,32 @@
+/* PekarchOS Neon Magenta - GTK 4 */
+@define-color theme_bg_color #0a0a12;
+@define-color theme_fg_color #e8f0ff;
+@define-color theme_selected_bg_color #ff2bd6;
+@define-color theme_selected_fg_color #ffffff;
+@define-color theme_base_color #12121c;
+@define-color theme_text_color #e8f0ff;
+
+window, .background {
+  background-color: @theme_bg_color;
+  color: @theme_fg_color;
+}
+
+button {
+  background-color: #1a1a28;
+  color: @theme_fg_color;
+  border-radius: 6px;
+}
+
+button:hover {
+  background-color: #ff2bd6;
+  color: #ffffff;
+}
+
+entry {
+  background-color: @theme_base_color;
+  color: @theme_text_color;
+}
+
+headerbar {
+  background-color: #0a0a12;
+}
