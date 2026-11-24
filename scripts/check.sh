@@ -12,7 +12,7 @@ fallo() {
 }
 
 ver="$(tr -d '[:space:]' < VERSION)"
-[[ "${ver}" == "0.3.0" ]] || fallo "VERSION es «${ver}» y esta fase es 0.3.0."
+[[ "${ver}" == "0.3.1" ]] || fallo "VERSION es «${ver}» y esta fase es 0.3.1."
 
 grep -q '@PEKARCHOS_VERSION@' branding/pekarchos-branding/root/usr/share/pekarchos/os-release \
 	|| fallo "os-release no toma la versión de VERSION."
@@ -30,7 +30,7 @@ PEKARCHOS_VERSION="${ver}" bash -c '
 	declare -A file_permissions
 	# shellcheck disable=SC1091
 	source archiso/profiledef.sh
-	[[ "${iso_version}" == "0.3.0" ]]
+	[[ "${iso_version}" == "0.3.1" ]]
 	[[ " ${bootmodes[*]} " == *" uefi.grub "* ]]
 	[[ " ${bootmodes[*]} " == *" bios.syslinux "* ]]
 	[[ "${kernel_params_x86_64}" != *ttyS0* ]]
