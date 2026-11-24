@@ -170,7 +170,11 @@ jobs:
             gh release upload "${tag}" --repo "${GITHUB_REPOSITORY}" --clobber "${assets[@]}"
             gh release edit "${tag}" --repo "${GITHUB_REPOSITORY}" --notes-file "${notes}"
           else
-            gh release create "${tag}" \
+            extra=()
+            if [[ "${tag}" == *-* ]]; then
+              extra+=(--prerelease)
+            fi
+            gh release create "${tag}" "${extra[@]}" \
               --repo "${GITHUB_REPOSITORY}" \
               --title "PekarchOS ${tag}" \
               --notes-file "${notes}" \
@@ -179,7 +183,8 @@ jobs:
           echo "Release ${tag} publicada. ISO: ${base}"
 
       - name: Subir la ISO entera a SourceForge si hay secretos
-        if: startsWith(github.ref, 'refs/tags/v')
+        # Las etiquetas de prueba (con guion, p. ej. v0.3.1-prueba1) no se suben.
+        if: startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-')
         env:
           SOURCEFORGE_USER: ${{ secrets.SOURCEFORGE_USER }}
           SOURCEFORGE_SSH_KEY: ${{ secrets.SOURCEFORGE_SSH_KEY }}
