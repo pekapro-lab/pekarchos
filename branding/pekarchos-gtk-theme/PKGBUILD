@@ -12,5 +12,5 @@ sha256sums=()
 
 package() {
   install -d "${pkgdir}/usr/share/themes/PekarchOS-Neon"
-  cp -a gtk-3.0 gtk-4.0 index.theme "${pkgdir}/usr/share/themes/PekarchOS-Neon/"
+  cp -a "${startdir}/gtk-3.0" "${startdir}/gtk-4.0" "${startdir}/index.theme" "${pkgdir}/usr/share/themes/PekarchOS-Neon/"
 }
